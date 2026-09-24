@@ -522,8 +522,8 @@ window.addEventListener("DOMContentLoaded", ()=>{
   $("testBtn").onclick = testSandbox;
   $("applyConfig").onclick = ()=>{ try{ STATE.config = parseConfigEditors(); }catch(e){ alert("Bad config: "+e.message); return; } if(!STATE.endpoints.length){ alert("Build first, then apply."); return; } rebuild(); };
   $("demoBtn").onclick = async ()=>{
-    const r = await fetch("sample-swagger.json"); $("swaggerText").value = await r.text();
-    const c = await fetch("sample-config.json"); const cfg = await c.json();
+    const r = await fetch("samples/sample-swagger.json"); $("swaggerText").value = await r.text();
+    const c = await fetch("samples/sample-config.json"); const cfg = await c.json();
     $("identitiesEditor").value = JSON.stringify(cfg.identities,null,2);
     $("permissionsEditor").value = JSON.stringify(cfg.permissions,null,2);
     $("ownershipEditor").value = JSON.stringify(cfg.ownership,null,2);

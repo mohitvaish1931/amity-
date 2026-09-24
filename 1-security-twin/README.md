@@ -3,7 +3,7 @@
 ## Run
 No build needed. Open `index.html` in a browser, or serve:
 ```
-cd C:\sentinel-x\part1
+cd 1-security-twin
 python -m http.server 8000
 # -> http://localhost:8000/
 ```
@@ -30,4 +30,5 @@ Proof: Seller/Support + Product/tenantId spec produces Seller laws with zero dem
 Banner `AUTHORIZED SANDBOX ONLY` is always visible. `sandboxOnly:true` is in exported JSON.
 
 ## Files
-- `index.html`, `styles.css`, `app.js`, `sample-swagger.json`, `sample-config.json`
+- `index.html`, `styles.css`, `app.js`
+- `samples/sample-swagger.json`, `samples/sample-config.json` (demo data)

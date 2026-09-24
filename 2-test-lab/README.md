@@ -2,7 +2,7 @@
 
 ## Run
 ```
-cd C:\sentinel-x\part2
+cd 2-test-lab
 python -m http.server 8001
 # -> http://localhost:8001/
 ```
@@ -56,4 +56,5 @@ python -m http.server 8001
 - No hardcoded shop data: endpoints/identities/ownership/fields all come from the imported model.
 
 ## Files
-- `index.html`, `app.js`, `styles.css`, `sample-testable-model.json` (generated from Part 1 demo)
+- `index.html`, `app.js`, `styles.css`
+- `samples/sample-testable-model.json` (demo data, generated from Part 1 demo)

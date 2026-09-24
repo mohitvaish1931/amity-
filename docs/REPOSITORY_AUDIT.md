@@ -12,7 +12,7 @@
 
 | Item | Finding |
 |---|---|
-| Layout | `part1/` (Security Twin Builder) and `part2/` (Autonomous Lab). Originally nested as `part1/part1/` and `part2/part2/`; flattened on 2026-09-24 (files moved unchanged). |
+| Layout | `1-security-twin/` (Part 1) and `2-test-lab/` (Part 2), each with a `samples/` folder. Originally nested as `part1/part1/` and `part2/part2/`; renamed and reorganized on 2026-09-24. Code logic unchanged; only the three demo-file fetch paths were updated. |
 | Languages | Vanilla browser JavaScript, HTML and CSS. |
 | Package manager / dependencies | **None.** No `package.json`, no lockfile, no third-party code. |
 | Build | **None.** Static files, opened directly or served with `python -m http.server`. |
@@ -28,17 +28,17 @@
 
 | File | Lines | Role |
 |---|---|---|
-| `part1/app.js` | 535 | Spec parser, resource/field inference, twin, inferences, laws, testable-model export, sandbox reachability check, all rendering |
-| `part1/index.html` | 67 | Single-page UI (Connect → Dashboard → Discovery → Model → Identity → Sensitivity → Twin → Inference → Constitution → Outputs) |
-| `part1/styles.css` | 33 | Styles |
-| `part1/sample-swagger.json` | 86 | Demo OpenAPI 3.0 "shop" spec (5 operations, 3 schemas) |
-| `part1/sample-config.json` | 12 | Demo identities, permission matrix and ownership map |
-| `part1/README.md` | 33 | Claims and usage |
-| `part2/app.js` | 571 | Model import, heuristic planner, mock and live executors, analyzer, confirmation, findings, evidence package, optional LLM wording and ideas |
-| `part2/index.html` | 63 | UI |
-| `part2/styles.css` | 31 | Styles |
-| `part2/sample-testable-model.json` | 669 | Part 1's demo output. **Verified byte-equivalent** to what Part 1 generates today (SHA-256 prefix `0e7d368e005fddc4` over laws, endpoints, resources and twin). |
-| `part2/README.md` | 59 | Claims and usage |
+| `1-security-twin/app.js` | 535 | Spec parser, resource/field inference, twin, inferences, laws, testable-model export, sandbox reachability check, all rendering |
+| `1-security-twin/index.html` | 67 | Single-page UI (Connect → Dashboard → Discovery → Model → Identity → Sensitivity → Twin → Inference → Constitution → Outputs) |
+| `1-security-twin/styles.css` | 33 | Styles |
+| `1-security-twin/samples/sample-swagger.json` | 86 | Demo OpenAPI 3.0 "shop" spec (5 operations, 3 schemas) |
+| `1-security-twin/samples/sample-config.json` | 12 | Demo identities, permission matrix and ownership map |
+| `1-security-twin/README.md` | 33 | Claims and usage |
+| `2-test-lab/app.js` | 571 | Model import, heuristic planner, mock and live executors, analyzer, confirmation, findings, evidence package, optional LLM wording and ideas |
+| `2-test-lab/index.html` | 63 | UI |
+| `2-test-lab/styles.css` | 31 | Styles |
+| `2-test-lab/samples/sample-testable-model.json` | 669 | Part 1's demo output. **Verified byte-equivalent** to what Part 1 generates today (SHA-256 prefix `0e7d368e005fddc4` over laws, endpoints, resources and twin). |
+| `2-test-lab/README.md` | 59 | Claims and usage |
 
 ---
 
@@ -131,13 +131,13 @@ The two parts are coupled only through the exported JSON contract (`version: "pa
 
 ### Where runtime testing is fake, browser-only, simulated or hardcoded
 
-1. `part2/app.js:170` `mockRequest`: fully simulated responses.
-2. `part2/app.js:197` `liveRequest`: real, but **browser-only** (`fetch`, `mode: "cors"`). It needs the target to send CORS headers (my sandbox sent `Access-Control-Allow-Origin: *`). A normal API without CORS gives `Failed to fetch`, and cookie auth cannot work cross-origin.
-3. `part2/app.js:211`: non-GET bodies are the hardcoded `{"id": <objectId|"1">}` regardless of schema (verified in the sandbox log).
-4. `part2/app.js:141`: AUTHN cases fill every path with the literal `"1"`.
-5. `part2/app.js:269` `confirm`: the "repeat" re-sends only the final request of a sequence.
-6. `part1/app.js:498` `testSandbox`: browser GET to any URL. A CORS failure is reported as "unreachable".
-7. `part2/app.js:350` `buildFindings`: confidence comes from law metadata, not from runtime.
+1. `2-test-lab/app.js:170` `mockRequest`: fully simulated responses.
+2. `2-test-lab/app.js:197` `liveRequest`: real, but **browser-only** (`fetch`, `mode: "cors"`). It needs the target to send CORS headers (my sandbox sent `Access-Control-Allow-Origin: *`). A normal API without CORS gives `Failed to fetch`, and cookie auth cannot work cross-origin.
+3. `2-test-lab/app.js:211`: non-GET bodies are the hardcoded `{"id": <objectId|"1">}` regardless of schema (verified in the sandbox log).
+4. `2-test-lab/app.js:141`: AUTHN cases fill every path with the literal `"1"`.
+5. `2-test-lab/app.js:269` `confirm`: the "repeat" re-sends only the final request of a sequence.
+6. `1-security-twin/app.js:498` `testSandbox`: browser GET to any URL. A CORS failure is reported as "unreachable".
+7. `2-test-lab/app.js:350` `buildFindings`: confidence comes from law metadata, not from runtime.
 
 ---
 

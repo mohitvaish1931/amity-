@@ -544,7 +544,7 @@ function renderLlmIdeas(){
 function download(name,text){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type:"application/json"})); a.download=name; a.click(); }
 
 window.addEventListener("DOMContentLoaded",()=>{
-  $("demoModelBtn").onclick=async()=>{ const r=await fetch("sample-testable-model.json"); $("modelText").value=await r.text(); };
+  $("demoModelBtn").onclick=async()=>{ const r=await fetch("samples/sample-testable-model.json"); $("modelText").value=await r.text(); };
   $("fileBtn").onclick=()=>$("modelFile").click();
   $("modelFile").addEventListener("change",e=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>$("modelText").value=rd.result; rd.readAsText(f); });
   $("planBtn").onclick=()=>{
