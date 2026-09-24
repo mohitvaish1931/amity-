@@ -1,6 +1,7 @@
 # Sentinel X — Repository Audit
 
 **Date:** 2026-09-24
+**Update:** this is the point-in-time audit of the original prototypes. The parser (BUG-15*, BUG-16, BUG-17), warning (BUG-14) and XSS (SEC-03, SEC-09) findings were fixed in the foundation-hardening phase; see `progress.md` and `tests.json` for per-issue status. File paths below have been updated to the current layout.
 **Scope:** everything under `C:\Users\mohit\Downloads\amity` (11 files, ~2,160 lines).
 **Method:** I read every file, ran syntax and type checks, served both apps locally and drove them in a real browser. I also ran Part 2 live mode against a **local-only** audit sandbox (`127.0.0.1:9100`, a scratch file that is not in this repo) that I wrote to probe its analyzer. Where this document says something was *verified*, I executed it. Where it says *code-read*, I did not execute it.
 

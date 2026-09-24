@@ -1,0 +1,42 @@
+{
+  "openapi": "3.0.1",
+  "info": { "title": "Fixture C: nested schemas", "version": "1" },
+  "security": [{ "bearer": [] }],
+  "paths": {
+    "/accounts/{accountId}": {
+      "get": {
+        "parameters": [{ "name": "accountId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Account" } } } } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": { "bearer": { "type": "http", "scheme": "bearer" } },
+    "schemas": {
+      "Account": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "plan": { "type": "string", "nullable": true },
+          "holder": {
+            "type": "object",
+            "required": ["email"],
+            "properties": {
+              "email": { "type": "string", "format": "email" },
+              "apiToken": { "type": "string" },
+              "mailing": { "$ref": "#/components/schemas/PostalAddress" }
+            }
+          }
+        }
+      },
+      "PostalAddress": {
+        "type": "object",
+        "properties": {
+          "street": { "type": "string" },
+          "city": { "type": "string" },
+          "country": { "type": "string" }
+        }
+      }
+    }
+  }
+}

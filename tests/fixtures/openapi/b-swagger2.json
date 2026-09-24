@@ -1,0 +1,58 @@
+{
+  "swagger": "2.0",
+  "info": { "title": "Fixture B: Swagger 2.0", "version": "0.9" },
+  "host": "api.sandbox.test",
+  "basePath": "/v2",
+  "schemes": ["https", "http"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "securityDefinitions": {
+    "basicAuth": { "type": "basic" },
+    "apiKey": { "type": "apiKey", "in": "header", "name": "X-Api-Key" }
+  },
+  "security": [{ "apiKey": [] }],
+  "parameters": {
+    "WidgetId": { "name": "widgetId", "in": "path", "required": true, "type": "integer", "format": "int64" }
+  },
+  "paths": {
+    "/widgets": {
+      "post": {
+        "operationId": "createWidget",
+        "parameters": [{ "name": "body", "in": "body", "required": true, "schema": { "$ref": "#/definitions/Widget" } }],
+        "responses": { "201": { "description": "created", "schema": { "$ref": "#/definitions/Widget" } } }
+      }
+    },
+    "/widgets/{widgetId}": {
+      "parameters": [{ "$ref": "#/parameters/WidgetId" }],
+      "get": {
+        "operationId": "getWidget",
+        "parameters": [{ "name": "fields", "in": "query", "type": "array", "items": { "type": "string" } }],
+        "responses": { "200": { "description": "ok", "schema": { "$ref": "#/definitions/Widget" } } }
+      }
+    },
+    "/widgets/{widgetId}/photo": {
+      "parameters": [{ "$ref": "#/parameters/WidgetId" }],
+      "post": {
+        "operationId": "uploadWidgetPhoto",
+        "security": [{ "basicAuth": [] }],
+        "consumes": ["multipart/form-data"],
+        "parameters": [
+          { "name": "file", "in": "formData", "type": "file", "required": true },
+          { "name": "caption", "in": "formData", "type": "string" }
+        ],
+        "responses": { "200": { "description": "uploaded" } }
+      }
+    }
+  },
+  "definitions": {
+    "Widget": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer", "format": "int64" },
+        "label": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "notes": { "type": "string", "x-nullable": true }
+      }
+    }
+  }
+}

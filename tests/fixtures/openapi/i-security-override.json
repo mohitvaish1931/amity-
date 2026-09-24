@@ -1,0 +1,20 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Fixture I: operation-level security override", "version": "1" },
+  "security": [{ "apiKey": [] }],
+  "paths": {
+    "/things": {
+      "get": { "responses": { "200": { "description": "inherits root" } } },
+      "post": { "security": [{ "bearer": [] }], "responses": { "201": { "description": "overrides with bearer" } } }
+    },
+    "/things/public": {
+      "get": { "security": [], "responses": { "200": { "description": "overrides to public" } } }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKey": { "type": "apiKey", "in": "query", "name": "key" },
+      "bearer": { "type": "http", "scheme": "bearer" }
+    }
+  }
+}

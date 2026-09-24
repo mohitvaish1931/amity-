@@ -1,10 +1,11 @@
 # Sentinel X — Part 2: Autonomous Lab (v2)
 
 ## Run
+From the repository root (the app is bundled with `src/ui/safe-html.ts`):
 ```
-cd 2-test-lab
-python -m http.server 8001
-# -> http://localhost:8001/
+npm install
+npm start
+# -> http://127.0.0.1:8000/2-test-lab/
 ```
 
 ## Flow (consumes Part 1, feeds Part 3)

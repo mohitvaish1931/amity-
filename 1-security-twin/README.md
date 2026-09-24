@@ -1,18 +1,18 @@
 # Sentinel X — Part 1: Security Twin Builder (v4 data-driven)
 
 ## Run
-No build needed. Open `index.html` in a browser, or serve:
+`app.js` imports the typed parser/model from `../src`, so it is bundled first. From the repository root:
 ```
-cd 1-security-twin
-python -m http.server 8000
-# -> http://localhost:8000/
+npm install
+npm start
+# -> http://127.0.0.1:8000/1-security-twin/
 ```
 
 ## Flow (matches design)
 1. Connect: Upload spec + paste configuration (or Load Demo), set Sandbox URL, Test Connection.
 2. Click BUILD SECURITY TWIN.
 3. Dashboard: readiness for Part 2.
-4. API Discovery: EP-001… method/path/auth/resource/action table (OpenAPI 3.x + Swagger 2.0, $ref, allOf).
+4. API Discovery: EP-001… method/path/auth/resource/action table (OpenAPI 3.0/3.1 + Swagger 2.0, JSON or YAML; parser in `src/openapi`, see docs/ARCHITECTURE.md).
 5. Enhanced API Model: resources/fields/relations + inferred ownershipField + sensitivity reasons.
 6. Identity & Ownership: 100% from configuration — no hardcoded users/roles/permissions.
 7. Sensitivity Engine: heuristic + reason + manual override → rebuild.
@@ -22,8 +22,8 @@ python -m http.server 8000
 11. Outputs: copy/download `testable-security-model.json` (version `part1-v4-datadriven`) — input contract for Part 2.
 
 ## Data-driven rule
-`app.js` contains zero instance data (no names, ids, roles, permissions, ownership, paths).
-Demo instance data lives only in `sample-swagger.json` + `sample-config.json`.
+`app.js` and `src/` contain zero instance data (no names, ids, roles, permissions, ownership, paths, or domain nouns).
+Demo instance data lives only in `samples/sample-swagger.json` + `samples/sample-config.json`.
 Proof: Seller/Support + Product/tenantId spec produces Seller laws with zero demo strings.
 
 ## Sandbox restriction

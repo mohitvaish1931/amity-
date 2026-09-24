@@ -1,68 +1,85 @@
 # Sentinel X
 
-Zero-trust API security testing prototype, built for a 24-hour hackathon. Runtime tests are meant to run **only against sandbox APIs you are authorized to test**.
+OpenAPI security modelling for **authorized sandbox APIs only**. Step 1 turns an OpenAPI/Swagger spec plus a small config (users, roles, ownership) into an API model, a Security Twin and a set of security laws. Step 2 plans authorization test cases from that model.
+
+> Current phase: **foundation hardening** (parser, typed model, XSS safety, tests). See [progress.md](progress.md) for exactly what is and is not implemented.
 
 ## Folder structure
 
 ```
 amity/
-├── README.md                  ← you are here
+├── README.md
+├── package.json, tsconfig.json, eslint.config.js, vitest.config.ts
 │
-├── 1-security-twin/           STEP 1: understand the API
-│   ├── index.html             UI (open this)
-│   ├── app.js                 all logic: spec parser, twin, security laws
-│   ├── styles.css
-│   ├── README.md
-│   └── samples/               demo input
-│       ├── sample-swagger.json    demo OpenAPI spec
-│       └── sample-config.json     demo users, roles, ownership
+├── src/                        typed, tested core (shared by both apps)
+│   ├── contracts/              shared types: ApiModel, Endpoint, Resource, SecurityLaw, Finding, Evidence…
+│   ├── openapi/                parser: JSON/YAML → normalized spec ($ref, composition, security semantics)
+│   ├── model/                  security model: resources, actions, field sensitivity, ownership
+│   └── ui/safe-html.ts         escape-by-default HTML templating used by both apps
 │
-├── 2-test-lab/                STEP 2: test the API
-│   ├── index.html             UI (open this)
-│   ├── app.js                 all logic: test planner, runner, findings
-│   ├── styles.css
-│   ├── README.md
-│   └── samples/
-│       └── sample-testable-model.json   demo input (= output of step 1)
+├── 1-security-twin/            STEP 1 browser app: spec → twin → constitution → testable model
+│   ├── index.html, app.js, styles.css
+│   └── samples/                demo spec + demo config
 │
-└── docs/
-    └── REPOSITORY_AUDIT.md    what works, what is simulated, known bugs, plan
+├── 2-test-lab/                 STEP 2 browser app: testable model → planned test cases
+│   ├── index.html, app.js, styles.css
+│   └── samples/                demo model (generated from step 1)
+│
+├── scripts/                    build, local server, jsdom harness, sample regeneration
+├── tests/                      Vitest suites + OpenAPI fixtures (A–M)
+└── docs/                       architecture, security model, sandbox policy, audit
 ```
 
-## How the two steps connect
+## Install
 
-```
-OpenAPI spec + config ──► 1-security-twin ──► testable-security-model.json ──► 2-test-lab ──► findings + evidence-package.json
-```
+Requires Node.js 20 or newer.
 
-| Folder | What it does |
-|---|---|
-| [`1-security-twin/`](1-security-twin/) | Reads an OpenAPI/Swagger spec and a config (users, roles, ownership). Builds the API inventory, security twin and security laws, and exports `testable-security-model.json`. |
-| [`2-test-lab/`](2-test-lab/) | Imports that model, plans test cases, runs them (mock or live sandbox), and exports confirmed findings as `evidence-package.json`. |
-| [`docs/`](docs/) | Engineering docs, starting with the [repository audit](docs/REPOSITORY_AUDIT.md). |
+```bash
+npm install
+```
 
 ## Run
 
-No install or build is needed; both steps are static web apps. Python is only used as a local file server.
-
-**Step 1: Security Twin**
-
 ```bash
-cd 1-security-twin
-python -m http.server 8000
+npm start
 ```
 
-Open http://localhost:8000, click **Load Demo Swagger + Config**, then **BUILD SECURITY TWIN**, and download `testable-security-model.json`.
+This builds both apps into `dist/` and serves them at http://127.0.0.1:8000/:
 
-**Step 2: Test Lab**
+- Step 1: http://127.0.0.1:8000/1-security-twin/ → **Load Demo Swagger + Config**, then **BUILD SECURITY TWIN**, then download `testable-security-model.json`.
+- Step 2: http://127.0.0.1:8000/2-test-lab/ → **Load Demo Model** (or paste the JSON from step 1), then **PLAN TESTS**.
+
+The apps import TypeScript from `src/`, so they must be built. Opening the source `index.html` directly no longer works.
+
+## Test, typecheck, lint, build
 
 ```bash
-cd 2-test-lab
-python -m http.server 8001
+npm test            # Vitest: parser, model, XSS regression, app-level tests
+npm run typecheck   # tsc --noEmit (strict)
+npm run lint        # ESLint (bans innerHTML in the apps)
+npm run build       # production bundles in dist/
+npm run check       # all four, in order
 ```
 
-Open http://localhost:8001, click **Load Demo Model** (or paste the JSON from step 1), then **PLAN TESTS** and **RUN ALL**.
+After changing step 1's model logic, regenerate the step 2 demo model (a test fails if it drifts):
 
-## Status
+```bash
+npm run sample:regen
+```
 
-Early prototype. See [`docs/REPOSITORY_AUDIT.md`](docs/REPOSITORY_AUDIT.md) for what currently works, what is simulated, known bugs and the implementation plan.
+## What the parser supports
+
+OpenAPI 3.0 / 3.1 and Swagger 2.0, as JSON or YAML: local `$ref` everywhere (schemas, parameters, request bodies, responses, path items, security schemes), recursive and mutually recursive schemas, `allOf`/`oneOf`/`anyOf`, nested objects, arrays, `nullable` (3.0, 3.1 type arrays, Swagger `x-nullable`), enums, path/query/header/cookie parameters with path-level + operation-level merging, multiple path parameters, content types, and correct security semantics (root inheritance, operation override, `[]` = public, `[{}]` = optional auth, AND/OR requirements). Malformed input produces errors or warnings, never a crash.
+
+## Current limitations
+
+- External (remote/file) `$ref` values are reported, not fetched.
+- Resource and sensitivity inference are heuristics with recorded evidence, not ground truth.
+- Step 2's test execution and finding logic are unchanged from the prototype. The audit issues there (browser-side execution, weak confirmation, mock findings labelled CONFIRMED) are still open. See [progress.md](progress.md).
+
+## Docs
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): modules and data flow
+- [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md): how the model is derived, plus the app safety rules
+- [docs/SANDBOX.md](docs/SANDBOX.md): the authorized-sandbox-only policy and its current enforcement
+- [docs/REPOSITORY_AUDIT.md](docs/REPOSITORY_AUDIT.md): the original audit

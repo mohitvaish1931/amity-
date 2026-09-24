@@ -1,0 +1,35 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Fixture J: requestBody through $ref", "version": "1" },
+  "paths": {
+    "/purchases": {
+      "post": {
+        "requestBody": { "$ref": "#/components/requestBodies/NewPurchase" },
+        "responses": { "201": { "description": "created" } }
+      }
+    }
+  },
+  "components": {
+    "requestBodies": {
+      "NewPurchase": { "$ref": "#/components/requestBodies/PurchaseBody" },
+      "PurchaseBody": {
+        "required": true,
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/CreatePurchaseRequest" } },
+          "application/xml": { "schema": { "$ref": "#/components/schemas/CreatePurchaseRequest" } }
+        }
+      }
+    },
+    "schemas": {
+      "CreatePurchaseRequest": {
+        "type": "object",
+        "required": ["sku"],
+        "properties": {
+          "sku": { "type": "string" },
+          "quantity": { "type": "integer" },
+          "cardNumber": { "type": "string" }
+        }
+      }
+    }
+  }
+}

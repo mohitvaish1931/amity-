@@ -1,0 +1,60 @@
+# Fixture E: recursive and mutually recursive $ref (YAML input)
+openapi: 3.0.3
+info:
+  title: "Fixture E: recursive refs"
+  version: "1"
+paths:
+  /nodes/{nodeId}:
+    get:
+      parameters:
+        - name: nodeId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: node
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TreeNode"
+  /folders/{folderId}:
+    get:
+      parameters:
+        - name: folderId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Folder"
+components:
+  schemas:
+    TreeNode:
+      type: object
+      properties:
+        id: { type: string }
+        parent:
+          $ref: "#/components/schemas/TreeNode"
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/TreeNode"
+    Folder:
+      type: object
+      properties:
+        id: { type: string }
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/File"
+    File:
+      type: object
+      properties:
+        name: { type: string }
+        folder:
+          $ref: "#/components/schemas/Folder"

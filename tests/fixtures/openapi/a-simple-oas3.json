@@ -1,0 +1,50 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Fixture A: simple OpenAPI 3", "version": "1.2.0" },
+  "servers": [{ "url": "https://{env}.example.test/v1", "variables": { "env": { "default": "sandbox" } } }],
+  "paths": {
+    "/items": {
+      "get": {
+        "operationId": "listItems",
+        "tags": ["Items"],
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "format": "int32" } },
+          { "name": "X-Request-Id", "in": "header", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "items",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Item" } } } }
+          }
+        }
+      }
+    },
+    "/items/{itemId}": {
+      "get": {
+        "operationId": "getItemById",
+        "parameters": [{ "name": "itemId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "item", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Item" } } } },
+          "404": { "description": "not found" }
+        }
+      },
+      "delete": {
+        "parameters": [{ "name": "itemId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "deleted" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Item": {
+        "type": "object",
+        "required": ["id", "title"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "status": { "type": "string", "enum": ["draft", "active", "retired"] }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Fixture G: public endpoints", "version": "1" },
+  "security": [{ "session": [] }],
+  "paths": {
+    "/health": { "get": { "security": [], "responses": { "200": { "description": "ok" } } } },
+    "/catalog": { "get": { "security": [{}, { "session": [] }], "responses": { "200": { "description": "ok" } } } },
+    "/cart": { "get": { "responses": { "200": { "description": "ok" } } } }
+  },
+  "components": {
+    "securitySchemes": { "session": { "type": "apiKey", "in": "cookie", "name": "sid" } }
+  }
+}

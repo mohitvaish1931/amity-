@@ -1,0 +1,27 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Fixture L: structurally valid but broken references", "version": "1" },
+  "paths": {
+    "/broken/{id}": {
+      "get": {
+        "parameters": [
+          { "$ref": "#/components/parameters/DoesNotExist" },
+          { "in": "query" },
+          "not-an-object"
+        ],
+        "requestBody": { "$ref": "https://remote.example.test/bodies.json#/Body" },
+        "responses": {
+          "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Missing" } } } },
+          "500": { "$ref": "#/components/responses/Loop" }
+        }
+      }
+    },
+    "/also-broken": "this should be a path item object"
+  },
+  "components": {
+    "responses": {
+      "Loop": { "$ref": "#/components/responses/Loop2" },
+      "Loop2": { "$ref": "#/components/responses/Loop" }
+    }
+  }
+}

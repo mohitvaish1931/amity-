@@ -2,13 +2,13 @@
 // Auth: per-identity credentials supplied by user (Bearer/API-key/Cookie). The lab never invents auth.
 // Sandbox gate: explicit user approval of the exact URL — never a substring heuristic.
 // Hypotheses: heuristic planner by default; optional user-provided LLM endpoint only enhances wording.
+import { html, joinHtml, setHtml } from "../src/ui/safe-html";
 const $ = (id) => document.getElementById(id);
 let S = { model:null, tests:[], results:{}, findings:[], running:false, sel:null, execMode:"mock", mockMode:"vulnerable", sandboxUrl:"",
   auth:{ scheme:"bearer", apiKeyName:"X-API-Key", cookieName:"session", creds:{} }, cookieAck:false,
   authorized:[], llm:{ endpoint:"", key:"", model:"", enabled:false }, llmIdeas:[] };
 
-function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
-function log(m){ const c=$("console"); const t=new Date().toLocaleTimeString(); c.innerHTML+=`\n[${t}] ${esc(m)}`; c.scrollTop=c.scrollHeight; }
+function log(m){ const c=$("console"); const t=new Date().toLocaleTimeString(); c.appendChild(document.createTextNode(`\n[${t}] ${m}`)); c.scrollTop=c.scrollHeight; }
 function isSandboxLike(url){ return /(sandbox|localhost|127\.|10\.|192\.168|staging|test|example|mock)/i.test(url||""); }
 function normUrl(u){ return String(u||"").trim().replace(/\/+$/,"").toLowerCase(); }
 function isAuthorized(url){ const n=normUrl(url); return S.authorized.some(a=>normUrl(a.url)===n); }
@@ -37,13 +37,9 @@ function authnHeaderPreview(test){
 }
 function idParam(tpl){ const m=/\{([^}]+)\}/.exec(tpl||""); return m?m[1]:"id"; }
 function fillPath(tpl,id){ return (tpl||"").replace(/\{[^}]+\}/, id); }
-function roleOf(id){ const f=(S.model.testIdentities||[]).find(i=>i.id===id); return f?f.role:"?"; }
 function nameOf(id){ const f=(S.model.testIdentities||[]).find(i=>i.id===id); return f?(f.name||id):id; }
 function ownerOf(objId){ const f=(S.model.ownership||[]).find(o=>String(o.objectId)===String(objId)); return f?f.ownerId:null; }
 function sensFields(){ const out=[]; const R=S.model.resources||{}; Object.keys(R).forEach(rn=>Object.keys((R[rn]||{fields:{}}).fields||{}).forEach(f=>{ const v=R[rn].fields[f]; if(v.sensitivity==="PERSONAL"||v.sensitivity==="SENSITIVE") out.push(rn+"."+f); })); return out; }
-function epById(eid){ return (S.model.endpoints||[]).find(e=>e.id===eid); }
-function firstIdGet(){ const t=S.model.twin; const c=t&&t.bolaCandidates&&t.bolaCandidates[0]; if(c){ const e=epById(c); if(e) return e; } return (S.model.endpoints||[]).find(e=>e.method==="GET"&&/\{.+\}/.test(e.path)); }
-function firstAdminEp(){ const t=S.model.twin; const a=t&&t.adminEndpoints&&t.adminEndpoints[0]; if(a){ const e=epById(a); if(e) return e; } return (S.model.endpoints||[]).find(e=>e.action==="AdminAction"||/^\/admin/i.test(e.path)); }
 function adminRole(){ return S.model.twin&&S.model.twin.adminRole||null; }
 function baseIdentity(){ const ids=S.model.testIdentities||[]; const br=(S.model.twin&&S.model.twin.baseRoles)||[]; return ids.find(i=>br.includes(i.role))||ids[0]; }
 function adminIdentity(){ const ar=adminRole(); if(!ar) return null; return (S.model.testIdentities||[]).find(i=>i.role===ar)||null; }
@@ -58,7 +54,6 @@ function loadModel(obj){
 }
 
 // ---------- planner ----------
-const KIND_PRIO={BOLA:1,ADMIN:1,AUTHN:2,DATA:2,ROLE:2,SEQUENCE:2,POLICY:3};
 // Heuristic planner: deterministic, explainable hypothesis templates from model data.
 // NOT an LLM agent. An optional user-provided LLM endpoint (see llmEnhance) may reword these;
 // without it, hypotheses are labelled heuristic.
@@ -382,17 +377,16 @@ function evidencePackage(){
     results:Object.keys(S.results).map(id=>({ test:id, law:S.results[id].test.lawId, kind:S.results[id].test.kind, status:S.results[id].status, hypothesisSource:S.results[id].test.hypothesisSource||"heuristic", request:S.results[id].resp?S.results[id].resp.request:undefined, response:S.results[id].resp?{status:S.results[id].resp.status,body:S.results[id].resp.body}:undefined, sequenceProof:(S.results[id].stepResults||[]).map(s=>({label:s.label,expected:s.expectedDeny?"DENY":"ALLOW",request:s.resp.request||{method:S.results[id].test.target.method,path:s.path,identity:S.results[id].test.identityId},response:{status:s.resp.status,body:s.resp.body,ms:s.resp.ms},ownership:s.analysis.rel,owner:s.analysis.owner,sensitive:s.analysis.sensFound,stepVerdict:s.analysis.verdict,stepReason:s.analysis.reason})), steps:S.results[id].steps||undefined })) };
 }
 
-// ---------- render ----------
+// ---------- render (all output goes through html``/setHtml, which escape every interpolated value) ----------
 function renderAll(){ renderPlanner(); renderTargets(); renderTests(); renderPreview(); renderResults(); renderMatrix(); renderFindings(); updateBtns(); }
 function updateBtns(){ $("runAllBtn").disabled=!S.tests.length||S.running; $("resetBtn").disabled=!Object.keys(S.results).length; $("dlEvidence").disabled=!S.findings.length; $("copyEvidence").disabled=!S.findings.length; }
 function renderPlanner(){
-  if(!S.model){ $("planner").innerHTML="—"; return; }
+  if(!S.model){ $("planner").textContent="—"; return; }
   const cond=S.model.laws.length, cases=S.tests.length;
-  const per={}; S.tests.forEach(t=>per[t.lawId]=(per[t.lawId]||0)+1);
-  $("planner").innerHTML=`<div class="tiles"><div class="tile"><b>${S.model.laws.length}</b><span class="sub">laws</span></div>
+  setHtml($("planner"), html`<div class="tiles"><div class="tile"><b>${S.model.laws.length}</b><span class="sub">laws</span></div>
   <div class="tile"><b>${cond}</b><span class="sub">conditions</span></div><div class="tile"><b>${cases}</b><span class="sub">cases</span></div>
-  <div class="tile"><b>${S.model.testIdentities.length}</b><span class="sub">identities</span></div></div>
-  <table><tr><th>Law</th><th>Category</th><th>Cases</th><th>Priority</th></tr>${S.model.laws.map(l=>{ const ts=S.tests.filter(t=>t.lawId===l.id); return `<tr><td><code>${l.id}</code> ${esc(l.title||"")}</td><td>${l.category}</td><td>${ts.length}</td><td>${ts.length?Math.min(...ts.map(t=>t.priority)):"—"}</td></tr>`; }).join("")}</table>${S.warnings2?`<div class="note">${esc(S.warnings2)}</div>`:""}`;
+  <div class="tile"><b>${(S.model.testIdentities||[]).length}</b><span class="sub">identities</span></div></div>
+  <table><tr><th>Law</th><th>Category</th><th>Cases</th><th>Priority</th></tr>${S.model.laws.map(l=>{ const ts=S.tests.filter(t=>t.lawId===l.id); return html`<tr><td><code>${l.id}</code> ${l.title||""}</td><td>${l.category}</td><td>${ts.length}</td><td>${ts.length?Math.min(...ts.map(t=>t.priority)):"—"}</td></tr>`; })}</table>${S.warnings2?html`<div class="note">${S.warnings2}</div>`:""}`);
 }
 function targetReason(e){
   const r=[]; if(/\{.+\}/.test(e.path)) r.push("object-ID"); if(/^\/admin/i.test(e.path)||e.action==="AdminAction") r.push("admin"); if(e.method!=="GET") r.push("write"); if(e.auth) r.push("auth-required");
@@ -401,78 +395,81 @@ function targetReason(e){
   return r.join(" · ")||"—";
 }
 function renderTargets(){
-  if(!S.tests.length){ $("targets").innerHTML="—"; return; }
+  if(!S.tests.length){ $("targets").textContent="—"; return; }
   const g={}; S.tests.forEach(t=>{ const k=t.target.method+" "+t.target.pathTemplate; g[k]=g[k]||{ep:k,n:0,prio:9,res:t.target.resource}; g[k].n++; g[k].prio=Math.min(g[k].prio,t.priority); });
-  const rows=Object.values(g).sort((a,b)=>a.prio-b.prio).map(x=>{ const e=(S.model.endpoints||[]).find(e=>(e.method+" "+e.path)===x.ep); return `<tr><td><code>${esc(x.ep)}</code></td><td>${x.n}</td><td>P${x.prio}</td><td class="sub">${e?esc(targetReason(e)):""}</td></tr>`; }).join("");
-  $("targets").innerHTML=`<table><tr><th>Endpoint</th><th>Cases</th><th>Prio</th><th>Why selected</th></tr>${rows}</table>`;
+  const rows=Object.values(g).sort((a,b)=>a.prio-b.prio).map(x=>{ const e=(S.model.endpoints||[]).find(e=>(e.method+" "+e.path)===x.ep); return html`<tr><td><code>${x.ep}</code></td><td>${x.n}</td><td>P${x.prio}</td><td class="sub">${e?targetReason(e):""}</td></tr>`; });
+  setHtml($("targets"), html`<table><tr><th>Endpoint</th><th>Cases</th><th>Prio</th><th>Why selected</th></tr>${rows}</table>`);
 }
 function renderTests(){
-  if(!S.tests.length){ $("tests").innerHTML="—"; return; }
-  $("tests").innerHTML=S.tests.map(t=>{ const r=S.results[t.id]; const st=r?r.status:(t.skip?"SKIPPED":"PENDING");
-    return `<div class="test ${S.sel===t.id?"sel":""}" data-t="${t.id}"><h3>${t.id} · ${t.lawId} · ${t.kind} <span class="badge b-${st}">${st}</span> <span class="sub">P${t.priority}</span></h3><div class="sub">[${esc(t.hypothesisSource||"heuristic")}] ${esc(t.hypothesis)}</div><div><code>${esc(t.target.method)}</code> <code>${esc(t.target.path)}</code> as <code>${esc(t.identityId||"anonymous")}</code> → expect ${esc(t.expectText)}</div></div>`; }).join("");
+  if(!S.tests.length){ $("tests").textContent="—"; return; }
+  setHtml($("tests"), html`${S.tests.map(t=>{ const r=S.results[t.id]; const st=r?r.status:(t.skip?"SKIPPED":"PENDING");
+    return html`<div class="test ${S.sel===t.id?"sel":""}" data-t="${t.id}"><h3>${t.id} · ${t.lawId} · ${t.kind} <span class="badge b-${st}">${st}</span> <span class="sub">P${t.priority}</span></h3><div class="sub">[${t.hypothesisSource||"heuristic"}] ${t.hypothesis}</div><div><code>${t.target.method}</code> <code>${t.target.path}</code> as <code>${t.identityId||"anonymous"}</code> → expect ${t.expectText}</div></div>`; })}`);
   document.querySelectorAll("#tests .test").forEach(d=>d.onclick=()=>{ S.sel=d.dataset.t; renderTests(); renderPreview(); });
 }
 function renderPreview(){
-  const t=S.tests.find(x=>x.id===S.sel); if(!t){ $("preview").innerHTML="<p class=sub>Select a test.</p>"; return; }
+  const t=S.tests.find(x=>x.id===S.sel); if(!t){ setHtml($("preview"), html`<p class="sub">Select a test.</p>`); return; }
   const r=S.results[t.id];
-  $("preview").innerHTML=`<div class="test sel"><h3>Preview ${t.id} — ${t.lawId}</h3>
-  <div><b>Hypothesis (${esc(t.hypothesisSource||"heuristic")} planner):</b> ${esc(t.hypothesis)}</div>
-  <div><b>Identity:</b> <code>${esc(t.identityId||"anonymous")}</code> <b>Endpoint:</b> <code>${esc(t.target.method)} ${esc(t.target.pathTemplate)}</code></div>
-  <div><b>Mutation (${esc(t.mutation.type)}):</b> ${esc(JSON.stringify(t.mutation))}</div>
-  <div><b>Auth sent (live):</b> <code>${esc(authnHeaderPreview(t))}</code>${S.execMode==="live"&&t.identityId&&!(S.auth.creds||{})[t.identityId]&&!isCookieScheme()?` <span class="warn">no credential — live run will be blocked</span>`:""}</div>
-  <div class="inv">REQUEST\n${t.target.method} ${(S.sandboxUrl||"")}${t.target.path}\n${authnHeaderPreview(t)}\nX-Sentinel-Test: ${t.id}/${t.lawId} (tracing only, not auth)\n\nEXPECTED: ${esc(t.expectText)}\nEXECUTION: ${S.execMode==="live"?(isAuthorized(S.sandboxUrl)?"APPROVED SANDBOX":"UNAPPROVED — approve first")+(isCookieScheme()?(S.cookieAck?" · COOKIE SUPPORT ACKED":" · COOKIE SUPPORT NOT ACKED — run will be blocked"):""):"MOCK "+S.mockMode}</div>
-  ${r?`<div><b>Result:</b> <span class="badge b-${r.status}">${r.status}</span> ${esc(r.reason||"")}</div>`:""}
-  <div class="row"><button class="ghost" id="runOneBtn" ${t.skip?"disabled":""}>RUN TEST</button><button class="ghost" id="llmOneBtn">Reword hypothesis (LLM)</button></div></div>`;
+  const noCred=S.execMode==="live"&&t.identityId&&!(S.auth.creds||{})[t.identityId]&&!isCookieScheme();
+  const execution=S.execMode==="live"?(isAuthorized(S.sandboxUrl)?"APPROVED SANDBOX":"UNAPPROVED — approve first")+(isCookieScheme()?(S.cookieAck?" · COOKIE SUPPORT ACKED":" · COOKIE SUPPORT NOT ACKED — run will be blocked"):""):"MOCK "+S.mockMode;
+  setHtml($("preview"), html`<div class="test sel"><h3>Preview ${t.id} — ${t.lawId}</h3>
+  <div><b>Hypothesis (${t.hypothesisSource||"heuristic"} planner):</b> ${t.hypothesis}</div>
+  <div><b>Identity:</b> <code>${t.identityId||"anonymous"}</code> <b>Endpoint:</b> <code>${t.target.method} ${t.target.pathTemplate}</code></div>
+  <div><b>Mutation (${t.mutation.type}):</b> ${JSON.stringify(t.mutation)}</div>
+  <div><b>Auth sent (live):</b> <code>${authnHeaderPreview(t)}</code>${noCred?html` <span class="warn">no credential — live run will be blocked</span>`:""}</div>
+  <div class="inv">REQUEST\n${t.target.method} ${S.sandboxUrl||""}${t.target.path}\n${authnHeaderPreview(t)}\nX-Sentinel-Test: ${t.id}/${t.lawId} (tracing only, not auth)\n\nEXPECTED: ${t.expectText}\nEXECUTION: ${execution}</div>
+  ${r?html`<div><b>Result:</b> <span class="badge b-${r.status}">${r.status}</span> ${r.reason||""}</div>`:""}
+  <div class="row"><button class="ghost" id="runOneBtn"${t.skip?html` disabled`:""}>RUN TEST</button><button class="ghost" id="llmOneBtn">Reword hypothesis (LLM)</button></div></div>`);
   const b=$("runOneBtn"); if(b) b.onclick=()=>runOne(t.id);
   const l=$("llmOneBtn"); if(l) l.onclick=()=>llmEnhance(t.id);
 }
 function renderResults(){
-  const ids=Object.keys(S.results); if(!ids.length){ $("results").innerHTML="—"; return; }
-  $("results").innerHTML=ids.map(id=>{ const r=S.results[id]; const t=r.test;
-    return `<div class="test"><h3>${id} · ${t.lawId} · ${t.kind} <span class="badge b-${r.status}">${r.status}</span></h3>
-    <div class="sub">[${esc(t.hypothesisSource||"heuristic")}] ${esc(t.hypothesis)}</div>
-    <div><code>${esc(t.target.method)} ${esc(t.target.path)}</code> as <code>${esc(t.identityId||"anonymous")}</code> → expected ${esc(t.expectText)}, got ${r.resp?("HTTP "+r.resp.status):esc(r.reason||"")}</div>
-    ${r.analysis?`<div class="sub">ownership: ${esc(r.analysis.rel)}${r.analysis.owner?(" (owner "+esc(r.analysis.owner)+")"):""} · sensitive: ${esc((r.analysis.sensFound||[]).join(", ")||"none")}${r.analysis.sim!=null?(` · similarity ${r.analysis.sim}%`):""}</div>`:""}
-    ${(r.steps||[]).length?`<div class="sub">confirmation: ${r.steps.map(esc).join(" → ")}</div>`:""}
-    ${r.stepResults?`<table><tr><th>Step</th><th>Request</th><th>Expected</th><th>Got</th><th>Step verdict</th></tr>${r.stepResults.map(s=>`<tr><td>${esc(s.label)}</td><td><code>${esc(s.path)}</code></td><td>${s.expectedDeny?"DENY":"ALLOW"}</td><td>${s.resp.status}</td><td>${esc(s.analysis.verdict)} — ${esc(s.analysis.reason)}</td></tr>`).join("")}</table>`:""}
-    ${r.resp?`<div class="inv">REQ ${r.resp.request.method} ${esc(r.resp.url)}\nRES ${r.resp.status} (${r.resp.ms}ms)\n${esc(JSON.stringify(r.resp.body).slice(0,600))}</div>`:""}</div>`; }).join("");
+  const ids=Object.keys(S.results); if(!ids.length){ $("results").textContent="—"; return; }
+  setHtml($("results"), html`${ids.map(id=>{ const r=S.results[id]; const t=r.test;
+    return html`<div class="test"><h3>${id} · ${t.lawId} · ${t.kind} <span class="badge b-${r.status}">${r.status}</span></h3>
+    <div class="sub">[${t.hypothesisSource||"heuristic"}] ${t.hypothesis}</div>
+    <div><code>${t.target.method} ${t.target.path}</code> as <code>${t.identityId||"anonymous"}</code> → expected ${t.expectText}, got ${r.resp?("HTTP "+r.resp.status):(r.reason||"")}</div>
+    ${r.analysis?html`<div class="sub">ownership: ${r.analysis.rel}${r.analysis.owner?(" (owner "+r.analysis.owner+")"):""} · sensitive: ${(r.analysis.sensFound||[]).join(", ")||"none"}${r.analysis.sim!=null?(` · similarity ${r.analysis.sim}%`):""}</div>`:""}
+    ${(r.steps||[]).length?html`<div class="sub">confirmation: ${r.steps.join(" → ")}</div>`:""}
+    ${r.stepResults?html`<table><tr><th>Step</th><th>Request</th><th>Expected</th><th>Got</th><th>Step verdict</th></tr>${r.stepResults.map(s=>html`<tr><td>${s.label}</td><td><code>${s.path}</code></td><td>${s.expectedDeny?"DENY":"ALLOW"}</td><td>${s.resp.status}</td><td>${s.analysis.verdict} — ${s.analysis.reason}</td></tr>`)}</table>`:""}
+    ${r.resp?html`<div class="inv">REQ ${r.resp.request.method} ${r.resp.url}\nRES ${r.resp.status} (${r.resp.ms}ms)\n${String(JSON.stringify(r.resp.body)).slice(0,600)}</div>`:""}</div>`; })}`);
 }
 function renderMatrix(){
-  if(!S.model){ $("matrix").innerHTML="—"; return; }
-  const eps=allIdGets(); if(!eps.length){ $("matrix").innerHTML="<p class=sub>No ID endpoint.</p>"; return; }
+  if(!S.model){ $("matrix").textContent="—"; return; }
+  const eps=allIdGets(); if(!eps.length){ setHtml($("matrix"), html`<p class="sub">No ID endpoint.</p>`); return; }
   const ids=S.model.testIdentities||[]; const own=S.model.ownership||[];
-  $("matrix").innerHTML=eps.map(idGet=>{
+  setHtml($("matrix"), html`${eps.map(idGet=>{
     const rows=ids.map(i=>{ const mine=own.find(o=>o.ownerId===i.id); const foreign=own.find(o=>o.ownerId!==i.id);
       const cell=(obj,exp)=>{ if(!obj) return "—"; const p=fillPath(idGet.path,obj.objectId); const hit=Object.keys(S.results).find(rid=>{ const r=S.results[rid]; return r.test.identityId===i.id&&r.test.target.path===p&&r.test.target.method===idGet.method; });
         if(!hit) return `${exp} (pending)`; const st=S.results[hit].status; return st==="PASS"?`✓ ${exp}`:`${st} (exp ${exp})`; };
-      return `<tr><td><code>${esc(i.id)}</code> (${esc(i.role)})</td><td><code>${mine?esc(fillPath(idGet.path,mine.objectId)):"—"}</code><br>${cell(mine,"ALLOW")}</td><td><code>${foreign?esc(fillPath(idGet.path,foreign.objectId)):"—"}</code><br>${cell(foreign,"DENY")}</td></tr>`; }).join("");
-    return `<h3><code>${esc(idGet.method+" "+idGet.path)}</code></h3><table><tr><th>Identity</th><th>Own (expect ALLOW)</th><th>Foreign (expect DENY)</th></tr>${rows}</table>`;
-  }).join("");
+      return html`<tr><td><code>${i.id}</code> (${i.role})</td><td><code>${mine?fillPath(idGet.path,mine.objectId):"—"}</code><br>${cell(mine,"ALLOW")}</td><td><code>${foreign?fillPath(idGet.path,foreign.objectId):"—"}</code><br>${cell(foreign,"DENY")}</td></tr>`; });
+    return html`<h3><code>${idGet.method+" "+idGet.path}</code></h3><table><tr><th>Identity</th><th>Own (expect ALLOW)</th><th>Foreign (expect DENY)</th></tr>${rows}</table>`;
+  })}`);
 }
 function renderFindings(){
-  if(!S.findings.length){ $("findings").innerHTML="<p class=sub>No confirmed findings yet. Run tests (try Mock: Vulnerable first).</p>"; $("evidenceOut").textContent="—"; return; }
-  $("findings").innerHTML=S.findings.map(f=>`<div class="test"><h3>${f.id} · ${esc(f.type)} <span class="badge b-CONFIRMED">CONFIRMED ${f.confidence}%</span> [${f.severity}]</h3>
-  <div>Endpoint <code>${esc(f.endpoint)}</code> · identity <code>${esc(f.identity)}</code> (${esc(f.identityName)}) · expected ${esc(f.expected)} · observed ${esc(f.observed)}</div>
-  <div class="sub">own=${esc(f.ownResource||"—")} foreign=${esc(f.foreignResource||"—")} · sensitive: ${esc((f.sensitiveData||[]).join(", ")||"none")}</div>
-  ${(f.sequenceProof||[]).length?`<div class="sub">proof chain: ${f.sequenceProof.map(s=>`${esc(s.label)} → exp ${esc(s.expected)}, got ${s.response.status} (${esc(s.stepVerdict)})`).join(" → ")}</div>`:""}
-  <div class="inv">${esc(f.reproduction.curl)}</div></div>`).join("");
+  if(!S.findings.length){ setHtml($("findings"), html`<p class="sub">No confirmed findings yet. Run tests (try Mock: Vulnerable first).</p>`); $("evidenceOut").textContent="—"; return; }
+  setHtml($("findings"), html`${S.findings.map(f=>html`<div class="test"><h3>${f.id} · ${f.type} <span class="badge b-CONFIRMED">CONFIRMED ${f.confidence}%</span> [${f.severity}]</h3>
+  <div>Endpoint <code>${f.endpoint}</code> · identity <code>${f.identity}</code> (${f.identityName}) · expected ${f.expected} · observed ${f.observed}</div>
+  <div class="sub">own=${f.ownResource||"—"} foreign=${f.foreignResource||"—"} · sensitive: ${(f.sensitiveData||[]).join(", ")||"none"}</div>
+  ${(f.sequenceProof||[]).length?html`<div class="sub">proof chain: ${f.sequenceProof.map(s=>`${s.label} → exp ${s.expected}, got ${s.response.status} (${s.stepVerdict})`).join(" → ")}</div>`:""}
+  <div class="inv">${f.reproduction.curl}</div></div>`)}`);
   $("evidenceOut").textContent=JSON.stringify(evidencePackage(),null,2);
 }
 // ---------- auth + approval + optional LLM wording ----------
 function renderAuth(){
   const box=$("authBox"); if(!box) return;
-  if(!S.model){ box.innerHTML="<p class=sub>Load a model first — credential fields appear per identity.</p>"; return; }
+  if(!S.model){ setHtml(box, html`<p class="sub">Load a model first — credential fields appear per identity.</p>`); return; }
   if(isCookieScheme()){
-    box.innerHTML=`<div class="note">⚠ Cookie auth uses your <b>browser cookie jar</b> (credentials:include) and runs <b>only if your sandbox supports it</b> — pasted cookie values <b>cannot</b> be sent by browser scripts (forbidden header), so per-identity cookie pasting is <b>unsupported for cross-origin execution</b>. Requirements: (1) log in to the sandbox in this browser first, (2) sandbox returns <code>Access-Control-Allow-Credentials: true</code> with an exact <code>Access-Control-Allow-Origin</code> (no wildcard), or run same-origin / via a proxy. For cross-origin sandboxes prefer Bearer or API-key. Mock mode simulates identities and is unaffected.</div>
-    <div class="row"><label style="margin:0"><input type="checkbox" id="cookieAck" style="width:auto" ${S.cookieAck?"checked":""}> My sandbox supports credentialed cookie requests and I am logged in (required for live cookie runs)</label></div>
-    <p class="sub">Scheme <b>cookie (browser jar)</b> · no secrets handled by the lab.</p>`;
+    setHtml(box, html`<div class="note">⚠ Cookie auth uses your <b>browser cookie jar</b> (credentials:include) and runs <b>only if your sandbox supports it</b> — pasted cookie values <b>cannot</b> be sent by browser scripts (forbidden header), so per-identity cookie pasting is <b>unsupported for cross-origin execution</b>. Requirements: (1) log in to the sandbox in this browser first, (2) sandbox returns <code>Access-Control-Allow-Credentials: true</code> with an exact <code>Access-Control-Allow-Origin</code> (no wildcard), or run same-origin / via a proxy. For cross-origin sandboxes prefer Bearer or API-key. Mock mode simulates identities and is unaffected.</div>
+    <div class="row"><label style="margin:0"><input type="checkbox" id="cookieAck" style="width:auto"${S.cookieAck?html` checked`:""}> My sandbox supports credentialed cookie requests and I am logged in (required for live cookie runs)</label></div>
+    <p class="sub">Scheme <b>cookie (browser jar)</b> · no secrets handled by the lab.</p>`);
     $("cookieAck").onchange=e=>{ S.cookieAck=e.target.checked; renderPreview(); };
     renderApproval(); return;
   }
-  box.innerHTML=(S.model.testIdentities||[]).map(i=>`<div class="row"><label style="margin:0;min-width:220px">${esc(i.name)} <code>${esc(i.id)}</code> (${esc(i.role)})</label>
-    <input type="password" data-cred="${esc(i.id)}" placeholder="token / key (stored in memory only)" value="${esc((S.auth.creds||{})[i.id]||"")}" style="flex:1"></div>`).join("")
-    + `<p class="sub">Scheme <b>${esc(S.auth.scheme)}</b> · credentials held in browser memory only — never written to findings or evidence.</p>`;
-  box.querySelectorAll("[data-cred]").forEach(inp=>inp.onchange=()=>{ S.auth.creds[inp.dataset.cred]=inp.value.trim(); });
+  setHtml(box, html`${(S.model.testIdentities||[]).map(i=>html`<div class="row"><label style="margin:0;min-width:220px">${i.name} <code>${i.id}</code> (${i.role})</label>
+    <input type="password" data-cred="${i.id}" placeholder="token / key (stored in memory only)" style="flex:1"></div>`)}
+    <p class="sub">Scheme <b>${S.auth.scheme}</b> · credentials held in browser memory only — never written to findings or evidence.</p>`);
+  // Credential values are set as DOM properties, never serialized into markup.
+  box.querySelectorAll("[data-cred]").forEach(inp=>{ inp.value=(S.auth.creds||{})[inp.dataset.cred]||""; inp.onchange=()=>{ S.auth.creds[inp.dataset.cred]=inp.value.trim(); }; });
   renderApproval();
 }
 function renderApproval(){
@@ -480,11 +477,11 @@ function renderApproval(){
   const url=($("sandboxUrl").value||"").trim();
   const ok=isAuthorized(url);
   const hint=isSandboxLike(url)?"URL looks sandbox-like (hint only — not approval).":"URL does not look sandbox-like (hint only — approval is still your explicit decision).";
-  box.innerHTML=`<p class="sub">${esc(hint)}</p>
-  <div class="row"><label style="margin:0"><input type="checkbox" id="approveChk" style="width:auto"> I confirm I am authorized to run security tests against <code>${esc(url||"(empty)")}</code></label>
+  setHtml(box, html`<p class="sub">${hint}</p>
+  <div class="row"><label style="margin:0"><input type="checkbox" id="approveChk" style="width:auto"> I confirm I am authorized to run security tests against <code>${url||"(empty)"}</code></label>
   <button class="ghost" id="approveBtn">Approve this sandbox</button></div>
-  <p class="sub">Approved targets: ${S.authorized.length?S.authorized.map(a=>`<code>${esc(a.url)}</code> (${esc(a.at)})`).join(" · "):"none — live runs are blocked until you approve"}</p>
-  ${S.execMode==="live"?(ok?`<p class="ok">● Live runs allowed for this URL.</p>`:`<p class="warn">● Live runs blocked — approve this exact URL first.</p>`):""}`;
+  <p class="sub">Approved targets: ${S.authorized.length?joinHtml(S.authorized.map(a=>html`<code>${a.url}</code> (${a.at})`)," · "):"none — live runs are blocked until you approve"}</p>
+  ${S.execMode==="live"?(ok?html`<p class="ok">● Live runs allowed for this URL.</p>`:html`<p class="warn">● Live runs blocked — approve this exact URL first.</p>`):""}`);
   $("approveBtn").onclick=()=>{
     if(!$("approveChk").checked){ alert("Tick the confirmation checkbox first — approval must be explicit."); return; }
     if(!url){ alert("Enter a sandbox URL first."); return; }
@@ -524,7 +521,7 @@ async function llmSuggest(){
   if(!S.llm.endpoint||!S.llm.key){ alert("Enter LLM endpoint and API key first."); return; }
   const eps=(S.model.endpoints||[]).map(e=>`${e.method} ${e.path} [${e.resource}/${e.action}, auth:${e.auth?"yes":"no"}]`).join("\n");
   const prompt=`You are a security-test reviewer. Given this sandbox API model, suggest up to 5 EXTRA boundary-test ideas NOT already covered (covered kinds: BOLA baseline/boundary/anonymous, sequence own-then-foreign, admin deny/allow, data-leak, per-endpoint anonymous). Reply as short numbered lines, each: METHOD path — idea — why. Model:\nEndpoints:\n${eps}\nOwnership field(s): ${Object.keys(S.model.resources||{}).map(r=>r+"."+((S.model.resources[r]||{}).ownershipField||"none")).join(", ")}\nRoles: ${[...new Set((S.model.testIdentities||[]).map(i=>i.role))].join(", ")}\nSensitive: ${sensFields().slice(0,10).join(", ")}`;
-  $("llmIdeas").innerHTML="<p class=sub>Asking LLM…</p>";
+  setHtml($("llmIdeas"), html`<p class="sub">Asking LLM…</p>`);
   try{
     const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),20000);
     const r=await fetch(S.llm.endpoint,{method:"POST",signal:ctl.signal,headers:{"Content-Type":"application/json","Authorization":"Bearer "+S.llm.key},
@@ -535,11 +532,11 @@ async function llmSuggest(){
     if(!txt) throw new Error("empty LLM reply");
     S.llmIdeas=String(txt).split("\n").map(s=>s.trim()).filter(Boolean);
     renderLlmIdeas();
-  }catch(e){ $("llmIdeas").innerHTML=`<p class="warn">LLM suggestion failed: ${esc(e.message)}. Heuristic set above is unaffected.</p>`; }
+  }catch(e){ setHtml($("llmIdeas"), html`<p class="warn">LLM suggestion failed: ${e.message}. Heuristic set above is unaffected.</p>`); }
 }
 function renderLlmIdeas(){
   const box=$("llmIdeas"); if(!box) return;
-  box.innerHTML=S.llmIdeas.length?`<p class="sub">LLM-suggested ideas (source: llm — <b>not executed</b>, review before recreating):</p>${S.llmIdeas.map((s,i)=>`<div class="test"><h3>Idea ${i+1} <span class="badge b-MEDIUM">llm-suggested</span></h3><div>${esc(s)}</div></div>`).join("")}`:`<p class="sub">No LLM suggestions yet. Heuristic planner output above is the MVP test set.</p>`;
+  setHtml(box, S.llmIdeas.length?html`<p class="sub">LLM-suggested ideas (source: llm — <b>not executed</b>, review before recreating):</p>${S.llmIdeas.map((s,i)=>html`<div class="test"><h3>Idea ${i+1} <span class="badge b-MEDIUM">llm-suggested</span></h3><div>${s}</div></div>`)}`:html`<p class="sub">No LLM suggestions yet. Heuristic planner output above is the MVP test set.</p>`);
 }
 function download(name,text){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type:"application/json"})); a.download=name; a.click(); }
 

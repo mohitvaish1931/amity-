@@ -1,5 +1,5 @@
 {
-  "version": "part1-v4-datadriven",
+  "version": "part1-v5-typed",
   "sandboxOnly": true,
   "sandboxBaseUrl": "https://sandbox-api.example.com",
   "sandboxCheck": {
@@ -9,11 +9,10 @@
     "version": "OpenAPI 3.0.0",
     "servers": [
       "https://sandbox-api.example.com"
-    ]
+    ],
+    "title": "Sentinel X Demo Shop"
   },
-  "warnings": [
-    "Resource Admin: no schema fields — generic 'id' inferred. Add schemas for better laws."
-  ],
+  "warnings": [],
   "testIdentities": [
     {
       "name": "User A",
@@ -67,11 +66,13 @@
       "method": "GET",
       "path": "/users/{id}",
       "auth": true,
-      "authDetail": "operation security (bearerAuth)",
+      "authMode": "required",
+      "authDetail": "operation security: bearerAuth",
       "authInferred": false,
       "resource": "User",
       "action": "Read",
       "summary": "Get user by id",
+      "operationId": null,
       "tags": [],
       "params": [
         {
@@ -83,19 +84,25 @@
       ],
       "bodyRef": null,
       "bodySchemaName": null,
-      "respRef": "#/components/schemas/User",
-      "respSchemaName": "User"
+      "bodyContentTypes": [],
+      "respRef": "User",
+      "respSchemaName": "User",
+      "respContentTypes": [
+        "application/json"
+      ]
     },
     {
       "id": "EP-002",
       "method": "GET",
       "path": "/orders/{id}",
       "auth": true,
-      "authDetail": "operation security (bearerAuth)",
+      "authMode": "required",
+      "authDetail": "operation security: bearerAuth",
       "authInferred": false,
       "resource": "Order",
       "action": "Read",
       "summary": "Get order by id",
+      "operationId": null,
       "tags": [],
       "params": [
         {
@@ -107,36 +114,48 @@
       ],
       "bodyRef": null,
       "bodySchemaName": null,
-      "respRef": "#/components/schemas/Order",
-      "respSchemaName": "Order"
+      "bodyContentTypes": [],
+      "respRef": "Order",
+      "respSchemaName": "Order",
+      "respContentTypes": [
+        "application/json"
+      ]
     },
     {
       "id": "EP-003",
       "method": "POST",
       "path": "/orders",
       "auth": true,
-      "authDetail": "operation security (bearerAuth)",
+      "authMode": "required",
+      "authDetail": "operation security: bearerAuth",
       "authInferred": false,
       "resource": "Order",
       "action": "Create",
       "summary": "Create order",
+      "operationId": null,
       "tags": [],
       "params": [],
-      "bodyRef": "#/components/schemas/Order",
+      "bodyRef": "Order",
       "bodySchemaName": "Order",
+      "bodyContentTypes": [
+        "application/json"
+      ],
       "respRef": null,
-      "respSchemaName": null
+      "respSchemaName": null,
+      "respContentTypes": []
     },
     {
       "id": "EP-004",
       "method": "GET",
       "path": "/orders/{id}/invoice",
       "auth": true,
-      "authDetail": "operation security (bearerAuth)",
+      "authMode": "required",
+      "authDetail": "operation security: bearerAuth",
       "authInferred": false,
-      "resource": "Order",
+      "resource": "Invoice",
       "action": "Read",
       "summary": "Get order invoice",
+      "operationId": null,
       "tags": [],
       "params": [
         {
@@ -148,25 +167,35 @@
       ],
       "bodyRef": null,
       "bodySchemaName": null,
-      "respRef": "#/components/schemas/Invoice",
-      "respSchemaName": "Invoice"
+      "bodyContentTypes": [],
+      "respRef": "Invoice",
+      "respSchemaName": "Invoice",
+      "respContentTypes": [
+        "application/json"
+      ]
     },
     {
       "id": "EP-005",
       "method": "POST",
       "path": "/admin/refund",
       "auth": true,
-      "authDetail": "operation security (bearerAuth)",
+      "authMode": "required",
+      "authDetail": "operation security: bearerAuth",
       "authInferred": false,
-      "resource": "Admin",
+      "resource": "Refund",
       "action": "AdminAction",
       "summary": "Admin refund",
+      "operationId": null,
       "tags": [],
       "params": [],
       "bodyRef": null,
       "bodySchemaName": null,
+      "bodyContentTypes": [
+        "application/json"
+      ],
       "respRef": null,
-      "respSchemaName": null
+      "respSchemaName": null,
+      "respContentTypes": []
     }
   ],
   "resources": {
@@ -178,157 +207,162 @@
         "id": {
           "type": "string",
           "sensitivity": "PUBLIC",
-          "reason": "no personal/internal pattern",
+          "reason": "object identifier/reference",
           "ref": null
         },
         "customerName": {
           "type": "string",
           "sensitivity": "PERSONAL",
-          "reason": "matches personal-data pattern",
+          "reason": "person name (\"customer name\")",
           "ref": null
         },
         "phone": {
           "type": "string",
           "sensitivity": "PERSONAL",
-          "reason": "matches personal-data pattern",
+          "reason": "contains \"phone\" (personal data pattern)",
           "ref": null
         },
         "address": {
           "type": "string",
           "sensitivity": "PERSONAL",
-          "reason": "matches personal-data pattern",
+          "reason": "contains \"address\" (personal data pattern)",
           "ref": null
         },
         "internalUserId": {
           "type": "string",
           "sensitivity": "INTERNAL",
-          "reason": "matches internal-identifier pattern",
+          "reason": "contains internal/debug marker",
           "ref": null
         }
       },
       "relations": [
-        "endpoint EP-001 -> User"
+        "endpoint EP-001 returns User"
       ],
       "ownershipField": null
     },
     "Order": {
       "endpoints": [
         "EP-002",
-        "EP-003",
+        "EP-003"
+      ],
+      "fields": {
+        "id": {
+          "type": "string",
+          "sensitivity": "PUBLIC",
+          "reason": "object identifier/reference",
+          "ref": null
+        },
+        "customerId": {
+          "type": "string",
+          "sensitivity": "PUBLIC",
+          "reason": "object identifier/reference",
+          "ref": null
+        },
+        "status": {
+          "type": "string",
+          "sensitivity": "PUBLIC",
+          "reason": "no sensitive pattern",
+          "ref": null
+        },
+        "amount": {
+          "type": "number",
+          "sensitivity": "PUBLIC",
+          "reason": "no sensitive pattern",
+          "ref": null
+        },
+        "customerName": {
+          "type": "string",
+          "sensitivity": "PERSONAL",
+          "reason": "person name (\"customer name\")",
+          "ref": null
+        },
+        "phone": {
+          "type": "string",
+          "sensitivity": "PERSONAL",
+          "reason": "contains \"phone\" (personal data pattern)",
+          "ref": null
+        },
+        "address": {
+          "type": "string",
+          "sensitivity": "PERSONAL",
+          "reason": "contains \"address\" (personal data pattern)",
+          "ref": null
+        },
+        "internalUserId": {
+          "type": "string",
+          "sensitivity": "INTERNAL",
+          "reason": "contains internal/debug marker",
+          "ref": null
+        },
+        "paymentMetadata": {
+          "type": "string",
+          "sensitivity": "SENSITIVE",
+          "reason": "contains \"payment\" (credential/payment/secret pattern)",
+          "ref": null
+        }
+      },
+      "relations": [
+        "endpoint EP-002 returns Order",
+        "endpoint EP-003 accepts Order"
+      ],
+      "ownershipField": "customerId"
+    },
+    "Invoice": {
+      "endpoints": [
         "EP-004"
       ],
       "fields": {
         "id": {
           "type": "string",
           "sensitivity": "PUBLIC",
-          "reason": "no personal/internal pattern",
-          "ref": null
-        },
-        "customerId": {
-          "type": "string",
-          "sensitivity": "PERSONAL",
-          "reason": "matches personal-data pattern",
-          "ref": null
-        },
-        "status": {
-          "type": "string",
-          "sensitivity": "PUBLIC",
-          "reason": "no personal/internal pattern",
-          "ref": null
-        },
-        "amount": {
-          "type": "number",
-          "sensitivity": "PUBLIC",
-          "reason": "no personal/internal pattern",
-          "ref": null
-        },
-        "customerName": {
-          "type": "string",
-          "sensitivity": "PERSONAL",
-          "reason": "matches personal-data pattern",
-          "ref": null
-        },
-        "phone": {
-          "type": "string",
-          "sensitivity": "PERSONAL",
-          "reason": "matches personal-data pattern",
-          "ref": null
-        },
-        "address": {
-          "type": "string",
-          "sensitivity": "PERSONAL",
-          "reason": "matches personal-data pattern",
-          "ref": null
-        },
-        "internalUserId": {
-          "type": "string",
-          "sensitivity": "INTERNAL",
-          "reason": "matches internal-identifier pattern",
-          "ref": null
-        },
-        "paymentMetadata": {
-          "type": "string",
-          "sensitivity": "SENSITIVE",
-          "reason": "matches sensitive pattern (payment/secret/token)",
-          "ref": null
-        }
-      },
-      "relations": [
-        "endpoint EP-002 -> Order"
-      ],
-      "ownershipField": "customerId"
-    },
-    "Admin": {
-      "endpoints": [
-        "EP-005"
-      ],
-      "fields": {
-        "id": {
-          "type": "string",
-          "sensitivity": "PUBLIC",
-          "reason": "generic fallback: identifier inferred from ID-parameterised endpoint",
-          "ref": null
-        }
-      },
-      "relations": [],
-      "ownershipField": null
-    },
-    "Invoice": {
-      "endpoints": [],
-      "fields": {
-        "id": {
-          "type": "string",
-          "sensitivity": "PUBLIC",
-          "reason": "no personal/internal pattern",
+          "reason": "object identifier/reference",
           "ref": null
         },
         "orderId": {
           "type": "string",
           "sensitivity": "PUBLIC",
-          "reason": "no personal/internal pattern",
+          "reason": "object identifier/reference",
           "ref": null
         },
         "status": {
           "type": "string",
           "sensitivity": "PUBLIC",
-          "reason": "no personal/internal pattern",
+          "reason": "no sensitive pattern",
           "ref": null
         },
         "amount": {
           "type": "number",
           "sensitivity": "PUBLIC",
-          "reason": "no personal/internal pattern",
+          "reason": "no sensitive pattern",
           "ref": null
         },
         "paymentMetadata": {
           "type": "string",
           "sensitivity": "SENSITIVE",
-          "reason": "matches sensitive pattern (payment/secret/token)",
+          "reason": "contains \"payment\" (credential/payment/secret pattern)",
           "ref": null
         }
       },
       "relations": [
-        "endpoint EP-004 -> Invoice"
+        "orderId -> Order",
+        "endpoint EP-004 returns Invoice"
+      ],
+      "ownershipField": null
+    },
+    "Refund": {
+      "endpoints": [
+        "EP-005"
+      ],
+      "fields": {
+        "orderId": {
+          "type": "string",
+          "sensitivity": "PUBLIC",
+          "reason": "object identifier/reference",
+          "ref": null
+        }
+      },
+      "relations": [
+        "orderId -> Order"
       ],
       "ownershipField": null
     }
@@ -413,28 +447,43 @@
         },
         "ownershipField": null,
         "relations": [
-          "endpoint EP-001 -> User"
+          "endpoint EP-001 returns User"
         ]
       },
       "Order": {
         "endpoints": [
           "EP-002",
-          "EP-003",
-          "EP-004"
+          "EP-003"
         ],
         "fieldCount": 9,
         "sensitivity": {
-          "PUBLIC": 3,
-          "PERSONAL": 4,
+          "PUBLIC": 4,
+          "PERSONAL": 3,
           "INTERNAL": 1,
           "SENSITIVE": 1
         },
         "ownershipField": "customerId",
         "relations": [
-          "endpoint EP-002 -> Order"
+          "endpoint EP-002 returns Order",
+          "endpoint EP-003 accepts Order"
         ]
       },
-      "Admin": {
+      "Invoice": {
+        "endpoints": [
+          "EP-004"
+        ],
+        "fieldCount": 5,
+        "sensitivity": {
+          "PUBLIC": 4,
+          "SENSITIVE": 1
+        },
+        "ownershipField": null,
+        "relations": [
+          "orderId -> Order",
+          "endpoint EP-004 returns Invoice"
+        ]
+      },
+      "Refund": {
         "endpoints": [
           "EP-005"
         ],
@@ -443,18 +492,8 @@
           "PUBLIC": 1
         },
         "ownershipField": null,
-        "relations": []
-      },
-      "Invoice": {
-        "endpoints": [],
-        "fieldCount": 5,
-        "sensitivity": {
-          "PUBLIC": 4,
-          "SENSITIVE": 1
-        },
-        "ownershipField": null,
         "relations": [
-          "endpoint EP-004 -> Invoice"
+          "orderId -> Order"
         ]
       }
     },
@@ -530,7 +569,7 @@
       "category": "DATA",
       "severity": "Medium",
       "title": "Foreign objects must not expose private/sensitive data.",
-      "source": "Sensitive: User.customerName, User.phone, User.address, Order.customerId, Order.customerName, Order.phone, Order.address, Order.paymentMetadata…",
+      "source": "Sensitive: User.customerName, User.phone, User.address, Order.customerName, Order.phone, Order.address, Order.paymentMetadata, Invoice.paymentMetadata",
       "confidence": "MEDIUM",
       "score": 60,
       "reason": "Heuristic — RISK until Part-2 runtime proof.",
@@ -551,7 +590,7 @@
       "source": "5/5 protected",
       "confidence": "HIGH",
       "score": 90,
-      "reason": "Explicit or default-deny.",
+      "reason": "Declared security requirement (operation or root level).",
       "invariant": "unauthenticated → DENY(protected)",
       "tests": [
         {
@@ -589,7 +628,7 @@
       "id": "INF-03",
       "claim": "Private/sensitive fields identified",
       "evidence": [
-        "9 PERSONAL/SENSITIVE fields"
+        "8 PERSONAL/SENSITIVE fields (including nested and array fields)"
       ],
       "confidence": "MEDIUM",
       "score": 60,

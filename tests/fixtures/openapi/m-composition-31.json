@@ -1,0 +1,43 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Fixture M: composition, nullable and enums (OpenAPI 3.1)", "version": "1" },
+  "paths": {
+    "/pets/{petId}": {
+      "get": {
+        "operationId": "getPetById",
+        "tags": ["Pets"],
+        "parameters": [{ "name": "petId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "pet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    { "$ref": "#/components/schemas/PetBase" },
+                    { "oneOf": [{ "$ref": "#/components/schemas/Cat" }, { "$ref": "#/components/schemas/Dog" }] }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PetBase": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string" },
+          "nickname": { "type": ["string", "null"] },
+          "kind": { "type": "string", "enum": ["cat", "dog"] }
+        }
+      },
+      "Cat": { "type": "object", "properties": { "indoor": { "type": "boolean" }, "microchipSecret": { "type": "string" } } },
+      "Dog": { "type": "object", "properties": { "indoor": { "type": "boolean" }, "breed": { "anyOf": [{ "type": "string" }, { "type": "null" }] } } }
+    }
+  }
+}

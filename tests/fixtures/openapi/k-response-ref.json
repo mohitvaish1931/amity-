@@ -1,0 +1,34 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Fixture K: response through $ref", "version": "1" },
+  "paths": {
+    "/shipments/{shipmentId}": {
+      "get": {
+        "parameters": [{ "name": "shipmentId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "$ref": "#/components/responses/ShipmentResponse" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    }
+  },
+  "components": {
+    "responses": {
+      "ShipmentResponse": {
+        "description": "shipment",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Shipment" } } }
+      },
+      "NotFound": {
+        "description": "missing",
+        "content": { "application/problem+json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "schemas": {
+      "Shipment": {
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "carrier": { "type": "string" }, "recipientPhone": { "type": "string" } }
+      },
+      "Error": { "type": "object", "properties": { "message": { "type": "string" } } }
+    }
+  }
+}

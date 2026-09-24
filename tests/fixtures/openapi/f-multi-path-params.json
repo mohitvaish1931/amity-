@@ -1,0 +1,47 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Fixture F: multiple path parameters", "version": "1" },
+  "paths": {
+    "/tenants/{tenantId}/projects/{projectId}/tasks/{taskId}": {
+      "parameters": [
+        { "$ref": "#/components/parameters/TenantId" },
+        { "name": "projectId", "in": "path", "required": true, "description": "path-level", "schema": { "type": "string" } }
+      ],
+      "get": {
+        "operationId": "getTask",
+        "parameters": [
+          { "name": "projectId", "in": "path", "required": true, "description": "operation-level override", "schema": { "type": "integer" } },
+          { "name": "taskId", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": { "200": { "description": "task", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Task" } } } } }
+      }
+    },
+    "/orders/{orderId}/cancel": {
+      "post": {
+        "parameters": [{ "name": "orderId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "202": { "description": "accepted" } }
+      }
+    },
+    "/regions/{regionCode}/stores": {
+      "get": {
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "TenantId": { "name": "tenantId", "in": "path", "required": true, "schema": { "type": "string" } }
+    },
+    "schemas": {
+      "Task": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "assigneeUserId": { "type": "string" },
+          "createdBy": { "type": "string" }
+        }
+      }
+    }
+  }
+}
