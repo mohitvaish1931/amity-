@@ -1,0 +1,670 @@
+{
+  "version": "part1-v4-datadriven",
+  "sandboxOnly": true,
+  "sandboxBaseUrl": "https://sandbox-api.example.com",
+  "sandboxCheck": {
+    "status": "idle"
+  },
+  "specInfo": {
+    "version": "OpenAPI 3.0.0",
+    "servers": [
+      "https://sandbox-api.example.com"
+    ]
+  },
+  "warnings": [
+    "Resource Admin: no schema fields — generic 'id' inferred. Add schemas for better laws."
+  ],
+  "testIdentities": [
+    {
+      "name": "User A",
+      "role": "Customer",
+      "id": "customer_001"
+    },
+    {
+      "name": "User B",
+      "role": "Customer",
+      "id": "customer_002"
+    },
+    {
+      "name": "Admin",
+      "role": "Administrator",
+      "id": "admin_001"
+    }
+  ],
+  "permissions": {
+    "Customer": {
+      "View Own Order": true,
+      "View Foreign Order": false,
+      "Create Order": true,
+      "Admin Refund": false
+    },
+    "Administrator": {
+      "View Orders": true,
+      "Refund": true,
+      "Manage Users": true
+    }
+  },
+  "ownership": [
+    {
+      "objectId": "101",
+      "ownerId": "customer_001",
+      "ownerName": "User A"
+    },
+    {
+      "objectId": "102",
+      "ownerId": "customer_002",
+      "ownerName": "User B"
+    },
+    {
+      "objectId": "103",
+      "ownerId": "customer_001",
+      "ownerName": "User A"
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "EP-001",
+      "method": "GET",
+      "path": "/users/{id}",
+      "auth": true,
+      "authDetail": "operation security (bearerAuth)",
+      "authInferred": false,
+      "resource": "User",
+      "action": "Read",
+      "summary": "Get user by id",
+      "tags": [],
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "bodyRef": null,
+      "bodySchemaName": null,
+      "respRef": "#/components/schemas/User",
+      "respSchemaName": "User"
+    },
+    {
+      "id": "EP-002",
+      "method": "GET",
+      "path": "/orders/{id}",
+      "auth": true,
+      "authDetail": "operation security (bearerAuth)",
+      "authInferred": false,
+      "resource": "Order",
+      "action": "Read",
+      "summary": "Get order by id",
+      "tags": [],
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "bodyRef": null,
+      "bodySchemaName": null,
+      "respRef": "#/components/schemas/Order",
+      "respSchemaName": "Order"
+    },
+    {
+      "id": "EP-003",
+      "method": "POST",
+      "path": "/orders",
+      "auth": true,
+      "authDetail": "operation security (bearerAuth)",
+      "authInferred": false,
+      "resource": "Order",
+      "action": "Create",
+      "summary": "Create order",
+      "tags": [],
+      "params": [],
+      "bodyRef": "#/components/schemas/Order",
+      "bodySchemaName": "Order",
+      "respRef": null,
+      "respSchemaName": null
+    },
+    {
+      "id": "EP-004",
+      "method": "GET",
+      "path": "/orders/{id}/invoice",
+      "auth": true,
+      "authDetail": "operation security (bearerAuth)",
+      "authInferred": false,
+      "resource": "Order",
+      "action": "Read",
+      "summary": "Get order invoice",
+      "tags": [],
+      "params": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "bodyRef": null,
+      "bodySchemaName": null,
+      "respRef": "#/components/schemas/Invoice",
+      "respSchemaName": "Invoice"
+    },
+    {
+      "id": "EP-005",
+      "method": "POST",
+      "path": "/admin/refund",
+      "auth": true,
+      "authDetail": "operation security (bearerAuth)",
+      "authInferred": false,
+      "resource": "Admin",
+      "action": "AdminAction",
+      "summary": "Admin refund",
+      "tags": [],
+      "params": [],
+      "bodyRef": null,
+      "bodySchemaName": null,
+      "respRef": null,
+      "respSchemaName": null
+    }
+  ],
+  "resources": {
+    "User": {
+      "endpoints": [
+        "EP-001"
+      ],
+      "fields": {
+        "id": {
+          "type": "string",
+          "sensitivity": "PUBLIC",
+          "reason": "no personal/internal pattern",
+          "ref": null
+        },
+        "customerName": {
+          "type": "string",
+          "sensitivity": "PERSONAL",
+          "reason": "matches personal-data pattern",
+          "ref": null
+        },
+        "phone": {
+          "type": "string",
+          "sensitivity": "PERSONAL",
+          "reason": "matches personal-data pattern",
+          "ref": null
+        },
+        "address": {
+          "type": "string",
+          "sensitivity": "PERSONAL",
+          "reason": "matches personal-data pattern",
+          "ref": null
+        },
+        "internalUserId": {
+          "type": "string",
+          "sensitivity": "INTERNAL",
+          "reason": "matches internal-identifier pattern",
+          "ref": null
+        }
+      },
+      "relations": [
+        "endpoint EP-001 -> User"
+      ],
+      "ownershipField": null
+    },
+    "Order": {
+      "endpoints": [
+        "EP-002",
+        "EP-003",
+        "EP-004"
+      ],
+      "fields": {
+        "id": {
+          "type": "string",
+          "sensitivity": "PUBLIC",
+          "reason": "no personal/internal pattern",
+          "ref": null
+        },
+        "customerId": {
+          "type": "string",
+          "sensitivity": "PERSONAL",
+          "reason": "matches personal-data pattern",
+          "ref": null
+        },
+        "status": {
+          "type": "string",
+          "sensitivity": "PUBLIC",
+          "reason": "no personal/internal pattern",
+          "ref": null
+        },
+        "amount": {
+          "type": "number",
+          "sensitivity": "PUBLIC",
+          "reason": "no personal/internal pattern",
+          "ref": null
+        },
+        "customerName": {
+          "type": "string",
+          "sensitivity": "PERSONAL",
+          "reason": "matches personal-data pattern",
+          "ref": null
+        },
+        "phone": {
+          "type": "string",
+          "sensitivity": "PERSONAL",
+          "reason": "matches personal-data pattern",
+          "ref": null
+        },
+        "address": {
+          "type": "string",
+          "sensitivity": "PERSONAL",
+          "reason": "matches personal-data pattern",
+          "ref": null
+        },
+        "internalUserId": {
+          "type": "string",
+          "sensitivity": "INTERNAL",
+          "reason": "matches internal-identifier pattern",
+          "ref": null
+        },
+        "paymentMetadata": {
+          "type": "string",
+          "sensitivity": "SENSITIVE",
+          "reason": "matches sensitive pattern (payment/secret/token)",
+          "ref": null
+        }
+      },
+      "relations": [
+        "endpoint EP-002 -> Order"
+      ],
+      "ownershipField": "customerId"
+    },
+    "Admin": {
+      "endpoints": [
+        "EP-005"
+      ],
+      "fields": {
+        "id": {
+          "type": "string",
+          "sensitivity": "PUBLIC",
+          "reason": "generic fallback: identifier inferred from ID-parameterised endpoint",
+          "ref": null
+        }
+      },
+      "relations": [],
+      "ownershipField": null
+    },
+    "Invoice": {
+      "endpoints": [],
+      "fields": {
+        "id": {
+          "type": "string",
+          "sensitivity": "PUBLIC",
+          "reason": "no personal/internal pattern",
+          "ref": null
+        },
+        "orderId": {
+          "type": "string",
+          "sensitivity": "PUBLIC",
+          "reason": "no personal/internal pattern",
+          "ref": null
+        },
+        "status": {
+          "type": "string",
+          "sensitivity": "PUBLIC",
+          "reason": "no personal/internal pattern",
+          "ref": null
+        },
+        "amount": {
+          "type": "number",
+          "sensitivity": "PUBLIC",
+          "reason": "no personal/internal pattern",
+          "ref": null
+        },
+        "paymentMetadata": {
+          "type": "string",
+          "sensitivity": "SENSITIVE",
+          "reason": "matches sensitive pattern (payment/secret/token)",
+          "ref": null
+        }
+      },
+      "relations": [
+        "endpoint EP-004 -> Invoice"
+      ],
+      "ownershipField": null
+    }
+  },
+  "twin": {
+    "auth": {
+      "required": [
+        "EP-001",
+        "EP-002",
+        "EP-003",
+        "EP-004",
+        "EP-005"
+      ],
+      "open": []
+    },
+    "roles": {
+      "Customer": {
+        "identities": [
+          {
+            "name": "User A",
+            "role": "Customer",
+            "id": "customer_001"
+          },
+          {
+            "name": "User B",
+            "role": "Customer",
+            "id": "customer_002"
+          }
+        ],
+        "allowed": [
+          "View Own Order",
+          "Create Order"
+        ],
+        "denied": [
+          "View Foreign Order",
+          "Admin Refund"
+        ],
+        "ownership": {
+          "101": "customer_001",
+          "102": "customer_002",
+          "103": "customer_001"
+        },
+        "adminEndpoints": []
+      },
+      "Administrator": {
+        "identities": [
+          {
+            "name": "Admin",
+            "role": "Administrator",
+            "id": "admin_001"
+          }
+        ],
+        "allowed": [
+          "View Orders",
+          "Refund",
+          "Manage Users"
+        ],
+        "denied": [],
+        "ownership": {},
+        "adminEndpoints": [
+          "EP-005"
+        ]
+      }
+    },
+    "adminRole": "Administrator",
+    "baseRoles": [
+      "Customer"
+    ],
+    "adminEndpoints": [
+      "EP-005"
+    ],
+    "resources": {
+      "User": {
+        "endpoints": [
+          "EP-001"
+        ],
+        "fieldCount": 5,
+        "sensitivity": {
+          "PUBLIC": 1,
+          "PERSONAL": 3,
+          "INTERNAL": 1
+        },
+        "ownershipField": null,
+        "relations": [
+          "endpoint EP-001 -> User"
+        ]
+      },
+      "Order": {
+        "endpoints": [
+          "EP-002",
+          "EP-003",
+          "EP-004"
+        ],
+        "fieldCount": 9,
+        "sensitivity": {
+          "PUBLIC": 3,
+          "PERSONAL": 4,
+          "INTERNAL": 1,
+          "SENSITIVE": 1
+        },
+        "ownershipField": "customerId",
+        "relations": [
+          "endpoint EP-002 -> Order"
+        ]
+      },
+      "Admin": {
+        "endpoints": [
+          "EP-005"
+        ],
+        "fieldCount": 1,
+        "sensitivity": {
+          "PUBLIC": 1
+        },
+        "ownershipField": null,
+        "relations": []
+      },
+      "Invoice": {
+        "endpoints": [],
+        "fieldCount": 5,
+        "sensitivity": {
+          "PUBLIC": 4,
+          "SENSITIVE": 1
+        },
+        "ownershipField": null,
+        "relations": [
+          "endpoint EP-004 -> Invoice"
+        ]
+      }
+    },
+    "bolaCandidates": [
+      "EP-001",
+      "EP-002",
+      "EP-004"
+    ],
+    "nodeSchema": [
+      "Identity",
+      "Role",
+      "Resource",
+      "Ownership",
+      "Endpoint",
+      "Sensitivity",
+      "AllowedActions"
+    ]
+  },
+  "laws": [
+    {
+      "id": "LAW-001",
+      "category": "BOLA",
+      "severity": "High",
+      "title": "Customer can access only owned Order objects.",
+      "source": "Ownership field 'customerId' on Order + EP-001, EP-002, EP-004 + map 101→User A; 102→User B; 103→User A",
+      "confidence": "HIGH",
+      "score": 90,
+      "reason": "Ownership field 'customerId' + configured map isolates Order.",
+      "invariant": "∀ Customer c, order o: ALLOW(GET /users/{id}) ⟺ owner(o)==c",
+      "tests": [
+        {
+          "given": "authenticated as customer_001 (User A)",
+          "when": "GET /orders/101 (own, owner=customer_001)",
+          "expect": "ALLOW + own data only"
+        },
+        {
+          "given": "authenticated as customer_001 (User A)",
+          "when": "GET /orders/102 (foreign, owner=customer_002)",
+          "expect": "DENY (401/403/404 without leakage) — violation = BOLA"
+        },
+        {
+          "given": "unauthenticated",
+          "when": "GET /orders/101",
+          "expect": "DENY (auth)"
+        }
+      ]
+    },
+    {
+      "id": "LAW-002",
+      "category": "ADMIN",
+      "severity": "High",
+      "title": "Non-Administrator roles cannot invoke admin-only actions.",
+      "source": "EP-005 POST /admin/refund + admin role='Administrator'",
+      "confidence": "HIGH",
+      "score": 90,
+      "reason": "Admin endpoints isolated to role 'Administrator'.",
+      "invariant": "role!=Administrator → DENY(POST /admin/refund)",
+      "tests": [
+        {
+          "given": "authenticated as customer_001 (non-admin)",
+          "when": "POST /admin/refund",
+          "expect": "DENY (403) — violation = broken access control"
+        },
+        {
+          "given": "authenticated as admin_001 (Administrator)",
+          "when": "POST /admin/refund",
+          "expect": "ALLOW"
+        }
+      ]
+    },
+    {
+      "id": "LAW-003",
+      "category": "DATA",
+      "severity": "Medium",
+      "title": "Foreign objects must not expose private/sensitive data.",
+      "source": "Sensitive: User.customerName, User.phone, User.address, Order.customerId, Order.customerName, Order.phone, Order.address, Order.paymentMetadata…",
+      "confidence": "MEDIUM",
+      "score": 60,
+      "reason": "Heuristic — RISK until Part-2 runtime proof.",
+      "invariant": "IF owner(o)!=caller THEN response MUST NOT contain PERSONAL/SENSITIVE",
+      "tests": [
+        {
+          "given": "authenticated as customer_001",
+          "when": "GET /orders/102 (foreign, owner=customer_002)",
+          "expect": "MUST NOT contain PERSONAL/SENSITIVE of another owner — leak = excessive exposure"
+        }
+      ]
+    },
+    {
+      "id": "LAW-004",
+      "category": "AUTHN",
+      "severity": "High",
+      "title": "Protected endpoints require authenticated identity.",
+      "source": "5/5 protected",
+      "confidence": "HIGH",
+      "score": 90,
+      "reason": "Explicit or default-deny.",
+      "invariant": "unauthenticated → DENY(protected)",
+      "tests": [
+        {
+          "given": "no token",
+          "when": "GET /users/{id}",
+          "expect": "DENY 401"
+        }
+      ]
+    }
+  ],
+  "inferences": [
+    {
+      "id": "INF-01",
+      "claim": "ID-parameterised reads are BOLA candidates",
+      "evidence": [
+        "EP-001 GET /users/{id}",
+        "EP-002 GET /orders/{id}",
+        "EP-004 GET /orders/{id}/invoice"
+      ],
+      "confidence": "HIGH",
+      "score": 90,
+      "needed": "Sandbox proof: cross-owner GET must DENY (owners: 101→User A; 102→User B; 103→User A)"
+    },
+    {
+      "id": "INF-02",
+      "claim": "Ownership links identities to objects",
+      "evidence": [
+        "Order.customerId + map 101→User A; 102→User B; 103→User A"
+      ],
+      "confidence": "HIGH",
+      "score": 90,
+      "needed": "Confirm owner(o) at runtime; if mismatch, law stays candidate"
+    },
+    {
+      "id": "INF-03",
+      "claim": "Private/sensitive fields identified",
+      "evidence": [
+        "9 PERSONAL/SENSITIVE fields"
+      ],
+      "confidence": "MEDIUM",
+      "score": 60,
+      "needed": "Runtime check: does foreign GET leak them? If yes → vuln, else RISK only"
+    },
+    {
+      "id": "INF-04",
+      "claim": "Auth boundary mapped",
+      "evidence": [
+        "5 protected, 0 open"
+      ],
+      "confidence": "HIGH",
+      "score": 90,
+      "needed": "Anonymous probe in Part 2 to confirm 401/403"
+    },
+    {
+      "id": "INF-05",
+      "claim": "Admin role boundary exists",
+      "evidence": [
+        "1 admin endpoints, admin role='Administrator', roles=[Customer, Administrator]"
+      ],
+      "confidence": "HIGH",
+      "score": 90,
+      "needed": "Non-admin (Customer) invoking admin endpoints must DENY"
+    }
+  ],
+  "expectedBehavior": [
+    {
+      "law": "LAW-001",
+      "category": "BOLA",
+      "given": "authenticated as customer_001 (User A)",
+      "when": "GET /orders/101 (own, owner=customer_001)",
+      "expect": "ALLOW + own data only"
+    },
+    {
+      "law": "LAW-001",
+      "category": "BOLA",
+      "given": "authenticated as customer_001 (User A)",
+      "when": "GET /orders/102 (foreign, owner=customer_002)",
+      "expect": "DENY (401/403/404 without leakage) — violation = BOLA"
+    },
+    {
+      "law": "LAW-001",
+      "category": "BOLA",
+      "given": "unauthenticated",
+      "when": "GET /orders/101",
+      "expect": "DENY (auth)"
+    },
+    {
+      "law": "LAW-002",
+      "category": "ADMIN",
+      "given": "authenticated as customer_001 (non-admin)",
+      "when": "POST /admin/refund",
+      "expect": "DENY (403) — violation = broken access control"
+    },
+    {
+      "law": "LAW-002",
+      "category": "ADMIN",
+      "given": "authenticated as admin_001 (Administrator)",
+      "when": "POST /admin/refund",
+      "expect": "ALLOW"
+    },
+    {
+      "law": "LAW-003",
+      "category": "DATA",
+      "given": "authenticated as customer_001",
+      "when": "GET /orders/102 (foreign, owner=customer_002)",
+      "expect": "MUST NOT contain PERSONAL/SENSITIVE of another owner — leak = excessive exposure"
+    },
+    {
+      "law": "LAW-004",
+      "category": "AUTHN",
+      "given": "no token",
+      "when": "GET /users/{id}",
+      "expect": "DENY 401"
+    }
+  ]
+}

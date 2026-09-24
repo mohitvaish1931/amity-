@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sentinel X Lab — Part 1: Security Twin</title>
+<link rel="stylesheet" href="styles.css">
+<style>.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:10px}.tile{background:#020617;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}.tile b{font-size:20px;display:block}.bar{height:8px;background:#1f2937;border-radius:6px;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;background:linear-gradient(90deg,#06b6d4,#22c55e)}select{background:#020617;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px}</style>
+</head>
+<body>
+<div class="sandbox-banner">🟢 AUTHORIZED SANDBOX ONLY — sandbox-api testing permitted · production testing is prohibited</div>
+<div class="wrap">
+<header><h1>SENTINEL X LAB — Part 1</h1>
+<p>OpenAPI / Sandbox → Discovery → Enhanced Model → Twin → Constitution → Testable Laws</p>
+<div class="steps"><span class="step" id="s1">1 Connect</span><span class="step" id="s2">2 Discovery</span><span class="step" id="s3">3 Model</span><span class="step" id="s4">4 Twin</span><span class="step" id="s5">5 Constitution</span></div>
+</header>
+
+<div class="card"><h2>1️⃣ Connect Screen</h2><p class="sub">First screen the judge sees.</p>
+<label>OpenAPI / Swagger — upload swagger.json or paste below</label>
+<div class="drop" onclick="document.getElementById('fileInput').click()">📄 Upload swagger.json (click) <input type="file" id="fileInput" accept=".json" hidden></div>
+<textarea id="swaggerText" placeholder='Paste swagger JSON here, or click "Load Demo Swagger"'></textarea>
+<div class="row"><button class="ghost" id="demoBtn">Load Demo Swagger + Config</button><span class="sub">Demo spec + demo configuration (identities, permissions, ownership). Replace with your own to prove data-driven.</span></div>
+<label>Sandbox Base URL</label><input type="text" id="baseUrl" value="https://sandbox-api.example.com">
+<div class="row" style="margin-top:8px"><button class="ghost" id="testBtn">Test Connection (safe GET)</button><span class="sub" id="sandboxStatus">Not tested.</span></div>
+<label>Configuration — identities (JSON array)</label><textarea id="identitiesEditor" style="min-height:70px" placeholder='[{"name":"...","role":"...","id":"..."}] — or Load Demo'></textarea>
+<label>Configuration — permissions (JSON: role → action → bool)</label><textarea id="permissionsEditor" style="min-height:70px" placeholder='{"RoleA":{"Action":true}} — or Load Demo'></textarea>
+<label>Configuration — ownership (JSON: objectId → ownerId)</label><textarea id="ownershipEditor" style="min-height:60px" placeholder='{"obj_1":"owner_id_1"} — or Load Demo'></textarea>
+<label>Configured identities</label>
+<div class="row" id="identityChips"><span class="sub">Load Demo or paste config.</span></div>
+<div class="row"><span class="ok">🟢 Authorized Sandbox</span></div>
+<button class="primary" id="buildBtn">[ BUILD SECURITY TWIN ]</button>
+</div>
+
+<div class="card"><h2>📊 Security Model Summary Dashboard</h2><p class="sub">Readiness for Part 2. Built dynamically after BUILD.</p><div id="dashboard"><p class="sub">Click BUILD SECURITY TWIN.</p></div></div>
+
+<div class="card"><h2>2️⃣ API Discovery <span class="sub" id="invCount"></span></h2><p class="sub">Endpoints, auth, resource, action, params/body. Supports OpenAPI 3.x + Swagger 2.0, $ref, allOf.</p><div id="discovery"><p class="sub">Click BUILD SECURITY TWIN.</p></div></div>
+
+<div class="card"><h2>3️⃣ Enhanced API Model</h2><p class="sub">Resources, fields, relations, ownership candidates, endpoint coverage.</p><div class="tree" id="apimodel">—</div></div>
+
+<div class="card"><h2>👤 Identity & Ownership Model</h2><p class="sub">All values from configuration above (not hardcoded). Ownership fields inferred from spec; map asserted in config. Editing config + Apply regenerates twin + laws.</p><div id="identitymodel">—</div>
+<div class="row"><button class="ghost" id="applyConfig">Apply config → rebuild</button></div>
+</div>
+
+<div class="card"><h2>🔒 Data Sensitivity Engine</h2><p class="sub">Heuristic classification + reason. Override any field — laws update. Excessive-data-exposure = RISK, not auto-vuln.</p><div id="sensTable">—</div></div>
+
+<div class="card"><h2>🧬 Dynamic Security Twin</h2><p class="sub">Generated from spec — not hardcoded. Node = Identity · Role · Resource · Ownership · Endpoint · Sensitivity · Allowed Actions.</p>
+<div class="row"><label style="margin:0">Explore resource:</label><select id="twinSelect"></select></div>
+<div class="grid2"><div><div class="tree" id="twin">—</div></div><div><div class="tree" id="twinDetail">—</div></div></div>
+<h3>Twin JSON</h3><pre class="out" id="twinJson">—</pre></div>
+
+<div class="card"><h2>🧠 Inference & Confidence Engine</h2><p class="sub">Every claim shows evidence + score + what would raise confidence. MEDIUM = needs Part-2 runtime proof.</p><div id="inferences">—</div></div>
+
+<div class="card"><h2>📜 Security Constitution</h2><p class="sub">Laws with category, confidence, invariant. Input to Part 2 test generator.</p><div id="laws">—</div></div>
+
+<div class="card"><h2>🧪 Testable Security Laws → Part 2 input</h2><p class="sub">Each law expands to Given/When/Expect cases for the Autonomous Lab.</p><div id="lawTests">—</div>
+<div class="grid2" style="margin-top:12px">
+<div><h3>1. API Inventory</h3><pre class="out" id="out1">—</pre></div>
+<div><h3>2. Security Twin</h3><pre class="out" id="out2">—</pre></div>
+<div><h3>3. Security Constitution</h3><pre class="out" id="out3">—</pre></div>
+<div><h3>4. Testable Security Model</h3><pre class="out" id="out4">—</pre>
+<div class="row"><button class="ghost" id="copy4">Copy</button><button class="ghost" id="dl4">Download JSON</button></div></div>
+</div>
+<p class="sub">Part 2 starts here: PART 1 Security Laws ▼ → PART 2 Autonomous Lab. Save the Testable Security Model JSON.</p>
+</div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Sentinel X Demo Shop", "version": "1.0.0" },
+  "servers": [{ "url": "https://sandbox-api.example.com" }],
+  "paths": {
+    "/users/{id}": {
+      "get": {
+        "summary": "Get user by id",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "User", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } } }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "summary": "Get order by id",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Order", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } } } }
+      }
+    },
+    "/orders": {
+      "post": {
+        "summary": "Create order",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/orders/{id}/invoice": {
+      "get": {
+        "summary": "Get order invoice",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Invoice", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Invoice" } } } } }
+      }
+    },
+    "/admin/refund": {
+      "post": {
+        "summary": "Admin refund",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "orderId": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "Refunded" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer" } },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "customerName": { "type": "string" },
+          "phone": { "type": "string" },
+          "address": { "type": "string" },
+          "internalUserId": { "type": "string" }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "customerId": { "type": "string" },
+          "status": { "type": "string" },
+          "amount": { "type": "number" },
+          "customerName": { "type": "string" },
+          "phone": { "type": "string" },
+          "address": { "type": "string" },
+          "internalUserId": { "type": "string" },
+          "paymentMetadata": { "type": "string" }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "orderId": { "type": "string" },
+          "status": { "type": "string" },
+          "amount": { "type": "number" },
+          "paymentMetadata": { "type": "string" }
+        }
+      }
+    }
+  }
+}

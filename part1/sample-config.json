@@ -1,0 +1,12 @@
+{
+  "identities": [
+    { "name": "User A", "role": "Customer", "id": "customer_001" },
+    { "name": "User B", "role": "Customer", "id": "customer_002" },
+    { "name": "Admin", "role": "Administrator", "id": "admin_001" }
+  ],
+  "permissions": {
+    "Customer": { "View Own Order": true, "View Foreign Order": false, "Create Order": true, "Admin Refund": false },
+    "Administrator": { "View Orders": true, "Refund": true, "Manage Users": true }
+  },
+  "ownership": { "101": "customer_001", "102": "customer_002", "103": "customer_001" }
+}
