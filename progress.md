@@ -1,5 +1,31 @@
 # Progress
 
+## 2026-09-24: Phase: Playwright end-to-end tests ✅
+
+Scope: browser QA of the existing Step 1 frontend. No security testing, scanning or target interaction.
+
+| Item | Detail |
+|---|---|
+| Playwright | `@playwright/test` 1.63.0 (pinned). `npm run test:e2e`. |
+| Browsers | Installed **Google Chrome 153.0.8010.53** and **Microsoft Edge 153.0.4234.48** via Playwright's `chrome`/`msedge` channels (no Playwright browser download). Bundled Chromium on non-Windows platforms; override with `PW_CHANNELS`. |
+| Server | `scripts/e2e-server.mjs` builds `dist/` and serves it on 127.0.0.1:4178 in one Node process. `reuseExistingServer: false`, so the tests never depend on a dev server. After each run, port 4178 is free and no e2e/server node process remains (checked). |
+| Tests (`e2e/step1.spec.ts`, 4 × 2 browsers = 8) | **Demo flow:** load demo, build, then check the graph appears. Node count, per-type counts and edge count must equal the model-derived values. Click a resource node, then check the panel heading and relationship count. Open its object-authorization law and check its statement, invariant, confidence and every provenance ref. Highlight its scope and check the highlighted node ids equal `lawHighlight()`, every other node is dimmed, and the card is focused. Finally, no console or page errors, and only local app assets requested. **Empty model:** empty state before a build; a spec without operations gives 0 endpoints and 0 laws. **Non-demo:** the marketplace fixture's graph and laws are model-derived, with no demo terms. **Invalid:** `Invalid spec: Invalid JSON…` alert, and no graph. |
+| Expected values | `e2e/expected.ts` computes the graph and constitution from the model libraries in Node, so no counts are hardcoded. |
+| Test ids added | `twin-graph`, `twin-node` (+ `data-node-type`), `law-card`, `law-focus`. `twin-panel` and React Flow's `rf__edge-*` already existed. No behaviour change. |
+| Favicon | Both apps declare `<link rel="icon" href="data:,">`. Without it the browser requested `/favicon.ico`, a 404 that shows up as a console error. |
+
+### Results
+
+- `npm test` 261/261 ✅ · `npm run typecheck` ✅ · `npm run lint` ✅ · `npm run build` ✅ · `npm run test:e2e` **8/8** ✅ (0 flaky)
+- Fixed while writing the tests: the invalid-model test deadlocked because the `alert()` dialog handler was registered after the click (test code, not app code).
+
+### Limitations
+
+- E2E is not part of `npm run check` or GitHub Actions yet. CI would need `npx playwright install --with-deps chromium`.
+- Only Step 1 is covered end to end. Step 2 is still covered by the jsdom app tests only.
+- Chromium-based browsers only (Chrome, Edge). Firefox and WebKit are not run, as they would require Playwright browser downloads.
+- Pointer drag, zoom and pan of the graph are not asserted (clicks and highlighting are).
+
 ## 2026-09-24: Phase: Security Constitution engine ✅
 
 Scope: static, model-level security reasoning only. No runtime testing, requests or scanning. Details in [docs/SECURITY_CONSTITUTION.md](docs/SECURITY_CONSTITUTION.md).

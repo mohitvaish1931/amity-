@@ -66,6 +66,8 @@ Status as of the Security Constitution phase (2026-09-24). This describes what e
 | `scripts/build.mjs` | Bundles each app (esbuild, IIFE, minified) into `dist/<app>/` with its HTML, CSS and samples. |
 | `scripts/serve.mjs` | Static server for `dist/` on 127.0.0.1 with path-traversal protection. |
 | `scripts/app-harness.mjs` | Loads a real app bundle into jsdom for tests. `fetch` serves only the app's own files, and any other URL throws. |
+| `scripts/e2e-server.mjs` | Builds `dist/` and serves it in one Node process: the Playwright `webServer`, so stopping it leaves no orphan. |
+| `playwright.config.ts`, `e2e/` | End-to-end tests on the production build in real browsers (Chrome + Edge channels on Windows, bundled Chromium elsewhere). `e2e/expected.ts` computes the expected graph/constitution from the model libraries. The tests use stable `data-testid` attributes (`twin-graph`, `twin-node` with `data-node-id`/`data-node-type`, React Flow's `rf__edge-*`, `twin-panel`, `law-card`, `law-focus`). |
 | `scripts/regen-sample.mjs` | Regenerates the step 2 demo model by running step 1 in the harness. |
 
 ## Build and runtime

@@ -295,7 +295,7 @@ function renderConstitution(){
   if(!c){ $("laws").textContent="—"; return; }
   const counts = Object.keys(CATEGORY_LABEL).map(k=>[k, c.laws.filter(l=>l.category===k).length]).filter(([,n])=>n);
   const scopeRow = (label, items)=> items.length ? html`<div><b>${label}:</b> ${items.join(" · ")}</div>` : "";
-  const cards = c.laws.map(l=>html`<details class="law const-law" data-law="${l.id}">
+  const cards = c.laws.map(l=>html`<details class="law const-law" data-testid="law-card" data-law="${l.id}">
     <summary><b>${l.id}</b> <span class="badge">${CATEGORY_LABEL[l.category]||l.category}</span> <span class="badge">${l.severity}</span>
       <span class="badge b-${l.confidence}">${l.confidence} · ${l.confidenceRationale.score}% of signals</span>
       <div class="const-statement">${l.statement}</div></summary>
@@ -311,7 +311,7 @@ function renderConstitution(){
       <h4>Test strategy <span class="sub">(${l.testStrategy.kind} · specification only, not executed)</span></h4>
       ${l.testStrategy.preconditions.length?html`<div class="sub">Preconditions: ${l.testStrategy.preconditions.join(" · ")}</div>`:""}
       <ol>${l.testStrategy.steps.map(st=>html`<li>${st}</li>`)}</ol><div><b>Expected:</b> ${l.testStrategy.expected}</div>
-      <div class="row"><button class="ghost" type="button" data-focus-law="${l.id}">Highlight scope in graph</button></div>
+      <div class="row"><button class="ghost" type="button" data-testid="law-focus" data-focus-law="${l.id}">Highlight scope in graph</button></div>
     </div></details>`);
   setHtml($("laws"), html`<p class="sub">${c.laws.length} laws · ${counts.map(([k,n])=>`${n} ${CATEGORY_LABEL[k].toLowerCase()}`).join(" · ")}</p>${cards}
     ${c.notes.length?html`<div class="note">${joinHtml(c.notes, html`<br>`)}</div>`:""}

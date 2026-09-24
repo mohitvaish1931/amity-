@@ -5,3 +5,6 @@ coverage/
 .env
 .env.*
 reports/
+test-results/
+playwright-report/
+blob-report/

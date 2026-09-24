@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:ci": "vitest run --reporter=default --reporter=github-actions --reporter=junit --outputFile.junit=reports/junit.xml",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "sample:regen": "node scripts/regen-sample.mjs",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build"
   },
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
+    "@playwright/test": "1.63.0",
     "@types/jsdom": "21.1.7",
     "@types/node": "22.19.1",
     "@types/react": "19.3.0",

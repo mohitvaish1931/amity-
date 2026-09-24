@@ -100,7 +100,9 @@ const TwinNodeView = memo(function TwinNodeView({ data, selected }: NodeProps<Tw
   return (
     <div
       className={`twin-node twin-${node.type} is-${emphasis}${selected ? " is-selected" : ""}`}
+      data-testid="twin-node"
       data-node-id={node.id}
+      data-node-type={node.type}
       data-sensitivity={node.type === "field" ? String(node.meta.sensitivity) : undefined}
       title={`${TYPE_LABEL[node.type]}: ${node.label}`}
     >
@@ -313,7 +315,7 @@ function GraphCanvas({ input, focus }: { input: TwinGraphInput; focus: LawFocus 
   }, [graph]);
 
   return (
-    <div className="twin-root">
+    <div className="twin-root" data-testid="twin-graph">
       <div className="twin-toolbar">
         <label>
           Fields{" "}

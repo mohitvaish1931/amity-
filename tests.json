@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "updated": "2026-09-24",
-  "phase": "security-constitution",
+  "phase": "playwright-e2e",
   "commands": {
     "install": {
       "cmd": "npm ci",
@@ -75,6 +75,27 @@
       ],
       "nextRun": "not pushed since 99775ec",
       "fixCommit": "99775ec (esbuild 0.25.12 -> 0.28.2)"
+    },
+    "e2e": {
+      "cmd": "npm run test:e2e",
+      "result": "pass",
+      "framework": "@playwright/test 1.63.0",
+      "browsers": [
+        "Google Chrome 153.0.8010.53 (channel chrome)",
+        "Microsoft Edge 153.0.4234.48 (channel msedge)"
+      ],
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "flaky": 0,
+      "server": "scripts/e2e-server.mjs on 127.0.0.1:4178 (build + serve, one process); port free and no leftover process after runs",
+      "file": "e2e/step1.spec.ts",
+      "tests": [
+        "demo flow: graph node/edge counts from model, node detail panel, law statement/invariant/confidence/provenance, highlight scope == lawHighlight(), unrelated nodes dimmed, no console errors, local assets only",
+        "empty model",
+        "non-demo model (marketplace fixture)",
+        "invalid model error state"
+      ]
     }
   },
   "fixtures": {

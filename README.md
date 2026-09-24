@@ -32,6 +32,7 @@ amity/
 │
 ├── scripts/                    build, local server, jsdom harness, sample regeneration
 ├── tests/                      Vitest suites + OpenAPI fixtures (A–M)
+├── e2e/                        Playwright end-to-end tests (real browsers, production build)
 └── docs/                       architecture, security model, sandbox policy, audit
 ```
 
@@ -64,7 +65,26 @@ npm run typecheck   # tsc --noEmit (strict)
 npm run lint        # ESLint (bans innerHTML in the apps)
 npm run build       # production bundles in dist/
 npm run check       # all four, in order
+npm run test:e2e    # Playwright end-to-end tests (builds + serves dist/ itself)
 ```
+
+### End-to-end browser tests (Playwright)
+
+```bash
+npm run test:e2e
+```
+
+This builds the production bundles and serves `dist/` on `127.0.0.1:4178` (`scripts/e2e-server.mjs`, a single Node process that Playwright starts and stops), then drives Step 1 in real browsers:
+- the demo flow: build the twin, click a resource node, open a law, highlight its scope;
+- empty, non-demo and invalid models.
+
+Expected node, edge and highlight counts are computed from the model libraries, never hardcoded. Each test also asserts there are no console errors and that only the app's own local assets are requested.
+
+- Windows: runs on the installed **Google Chrome** and **Microsoft Edge** (`chrome` and `msedge` channels), so no Playwright browser download is needed.
+- Other platforms: uses Playwright's bundled Chromium. Install it once with `npx playwright install chromium`.
+- Override with `PW_CHANNELS`, e.g. `PW_CHANNELS=chromium` or `PW_CHANNELS=chrome`. The port can be changed with `E2E_PORT`.
+
+The E2E suite is not part of `npm run check` or CI yet.
 
 ### Continuous integration
 
