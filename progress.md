@@ -1,6 +1,6 @@
 # Progress
 
-## 2026-09-24: CI foundation ✅ (workflow not yet run on GitHub)
+## 2026-09-24: CI foundation ✅ (first GitHub run failed; fix verified locally, awaiting a new run)
 
 Scope: CI and dev tooling only. No application behaviour changed.
 
@@ -19,9 +19,16 @@ Scope: CI and dev tooling only. No application behaviour changed.
 - `npm run test:ci`: 218/218, `reports/junit.xml` written and ignored by git.
 - A throwaway failing test under `GITHUB_ACTIONS=true` produced a `::error file=…,line=…` annotation and exit code 1. The file was deleted afterwards.
 
-### Not verified
+### First GitHub run: failed at `npm ci`, then fixed
 
-- **No GitHub Actions run exists yet.** Nothing has been pushed. The workflow was checked by parsing it and by the invariant tests above, not by GitHub. `actionlint` was not run: installing it means downloading a binary, which I avoided.
+- Run [36008148009](https://github.com/mohitvaish1931/amity-/actions/runs/36008148009) on `38b3a29`: checkout ✅, setup Node ✅, **`npm ci` ❌**, all checks skipped.
+- Cause, reproduced locally with a fresh clone and `npx npm@10 ci`: `Missing: @esbuild/*@0.28.2 from lock file`.
+  - Vite 8 (under Vitest) has an optional peer `esbuild ^0.27 || ^0.28`, and the direct dependency was `esbuild 0.25.12`.
+  - The lockfile was written by npm 11, which leaves the unmet optional peer alone. GitHub's Node 22 bundles **npm 10**, which requires a matching esbuild entry and aborts.
+- Fix: direct `esbuild` upgraded to **0.28.2**. It satisfies Vite's peer, so only one esbuild version is left in the tree.
+  - Verified on a copy of the working tree: `npx npm@10 ci` ✅ then `npm run check` ✅ (218/218). Locally, `npm ci` (npm 11) ✅ then `npm run check` ✅.
+- The workflow now prints `node`/`npm` versions before install, so version-related failures are visible in the log.
+- `actionlint` was not run: installing it means downloading a binary, which I avoided.
 
 ## 2026-09-24: Sandbox policy messaging aligned ✅
 

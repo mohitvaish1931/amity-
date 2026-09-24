@@ -31,6 +31,12 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
 
+      # Node 22 bundles npm 10; the lockfile must be accepted by it (see progress.md, CI fix).
+      - name: Show tool versions
+        run: |
+          echo "node $(node --version)"
+          echo "npm $(npm --version)"
+
       - name: Install dependencies (npm ci, lockfile only)
         id: install
         run: npm ci

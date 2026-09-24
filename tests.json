@@ -6,7 +6,7 @@
     "install": {
       "cmd": "npm ci",
       "result": "pass",
-      "notes": "clean install from package-lock.json; 0 vulnerabilities"
+      "notes": "npm ci verified with npm 11 (local) and npm 10 (as bundled with Node 22 on GitHub); 0 vulnerabilities"
     },
     "typecheck": {
       "cmd": "npm run typecheck",
@@ -52,8 +52,17 @@
     },
     "githubActions": {
       "workflow": ".github/workflows/ci.yml",
-      "result": "not-run",
-      "notes": "no push yet, so no GitHub run exists; validated by YAML parsing + tests/ci/workflow.test.ts"
+      "runs": [
+        {
+          "id": 36008148009,
+          "commit": "38b3a29",
+          "result": "failure",
+          "failedStep": "npm ci",
+          "cause": "npm 10 (Node 22 bundled) rejected npm-11 lockfile: unmet optional peer esbuild ^0.27||^0.28 of vite 8 (Missing @esbuild/*@0.28.2)"
+        }
+      ],
+      "fix": "esbuild 0.25.12 -> 0.28.2; verified with npx npm@10 ci + npm run check on a clean copy (218/218)",
+      "nextRun": "pending push"
     }
   },
   "fixtures": {
