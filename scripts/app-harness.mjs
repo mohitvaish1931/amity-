@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Bundle <appDir>/app.js (and the src/ modules it imports) into one IIFE string. */
+/** Bundle <appDir>/app.js (and the src/ modules it imports). Returns the JS and any bundled CSS. */
 export async function bundleApp(appDir, { minify = false, sourcemap = false } = {}) {
   const result = await build({
     entryPoints: [path.join(ROOT, appDir, "app.js")],
@@ -16,21 +16,60 @@ export async function bundleApp(appDir, { minify = false, sourcemap = false } = 
     format: "iife",
     platform: "browser",
     target: "es2020",
+    outdir: path.join(ROOT, "dist", appDir), // naming only; write:false keeps output in memory
     write: false,
     minify,
     sourcemap: sourcemap ? "inline" : false,
+    jsx: "automatic",
+    define: { "process.env.NODE_ENV": JSON.stringify(minify ? "production" : "development") },
     logLevel: "silent",
   });
-  return result.outputFiles[0].text;
+  const js = result.outputFiles.find((f) => f.path.endsWith(".js"));
+  const css = result.outputFiles.find((f) => f.path.endsWith(".css"));
+  return { js: js ? js.text : "", css: css ? css.text : "" };
+}
+
+/** Minimal layout APIs React Flow needs in jsdom (it measures nodes and observes resizes). */
+function installLayoutStubs(w) {
+  w.ResizeObserver = class {
+    constructor(cb) {
+      this.cb = cb;
+    }
+    observe(target) {
+      const rect = { width: target.offsetWidth, height: target.offsetHeight, top: 0, left: 0, x: 0, y: 0 };
+      this.cb([{ target, contentRect: rect, borderBoxSize: [{ inlineSize: rect.width, blockSize: rect.height }] }], this);
+    }
+    unobserve() {}
+    disconnect() {}
+  };
+  w.DOMMatrixReadOnly = class {
+    constructor(transform) {
+      const scale = /scale\(([\d.]+)\)/.exec(String(transform || ""));
+      this.m22 = scale ? Number(scale[1]) : 1;
+    }
+  };
+  Object.defineProperties(w.HTMLElement.prototype, {
+    offsetHeight: { get() { return parseFloat(this.style.height) || 1; }, configurable: true },
+    offsetWidth: { get() { return parseFloat(this.style.width) || 1; }, configurable: true },
+  });
+  w.SVGElement.prototype.getBBox = () => ({ x: 0, y: 0, width: 0, height: 0 });
 }
 
 export async function loadApp(appDir) {
-  const code = await bundleApp(appDir);
+  const { js, css } = await bundleApp(appDir);
   const page = readFileSync(path.join(ROOT, appDir, "index.html"), "utf8").replace(/<script[^>]*src="app\.js"[^>]*><\/script>/, "");
   const dom = new JSDOM(page, { runScripts: "dangerously", url: `http://sentinel.test/${appDir}/`, pretendToBeVisual: true });
   const w = dom.window;
+  installLayoutStubs(w);
+  if (css) {
+    const style = w.document.createElement("style");
+    style.textContent = css;
+    w.document.head.appendChild(style);
+  }
   const alerts = [];
+  const errors = [];
   w.alert = (m) => alerts.push(String(m));
+  w.addEventListener("error", (e) => errors.push(String(e.message || e.error)));
   Object.defineProperty(w.navigator, "clipboard", { value: { writeText: async () => {} }, configurable: true });
   w.fetch = async (url) => {
     const u = new URL(String(url), w.location.href);
@@ -42,7 +81,7 @@ export async function loadApp(appDir) {
     const text = readFileSync(file, "utf8");
     return { ok: true, status: 200, text: async () => text, json: async () => JSON.parse(text) };
   };
-  w.eval(code);
+  w.eval(js);
   w.dispatchEvent(new w.Event("DOMContentLoaded"));
 
   const $ = (id) => w.document.getElementById(id);
@@ -50,13 +89,14 @@ export async function loadApp(appDir) {
     window: w,
     document: w.document,
     alerts,
+    errors,
     $,
     click: (id) => $(id).click(),
     setValue: (id, value) => {
       $(id).value = value;
     },
-    /** Let pending promise callbacks (fetch/FileReader chains) settle. */
-    settle: () => new Promise((r) => setTimeout(r, 20)),
+    /** Let pending promise callbacks (fetch/FileReader chains, React effects) settle. */
+    settle: () => new Promise((r) => setTimeout(r, 30)),
     close: () => w.close(),
   };
 }

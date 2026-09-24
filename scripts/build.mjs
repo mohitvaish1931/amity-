@@ -14,9 +14,13 @@ for (const app of APPS) {
   const out = path.join(DIST, app.dir);
   mkdirSync(out, { recursive: true });
   for (const asset of app.assets) cpSync(path.join(ROOT, app.dir, asset), path.join(out, asset), { recursive: true });
-  const code = await bundleApp(app.dir, { minify: true });
-  writeFileSync(path.join(out, "app.js"), code);
-  console.log(`built dist/${app.dir}/app.js (${(code.length / 1024).toFixed(1)} KiB)`);
+  const { js, css } = await bundleApp(app.dir, { minify: true });
+  writeFileSync(path.join(out, "app.js"), js);
+  console.log(`built dist/${app.dir}/app.js (${(js.length / 1024).toFixed(1)} KiB)`);
+  if (css) {
+    writeFileSync(path.join(out, "app.css"), css);
+    console.log(`built dist/${app.dir}/app.css (${(css.length / 1024).toFixed(1)} KiB)`);
+  }
 }
 
 const links = APPS.map((a) => `<li><a href="${a.dir}/">${a.title}</a></li>`).join("");

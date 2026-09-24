@@ -15,6 +15,7 @@ amity/
 │   ├── contracts/              shared types: ApiModel, Endpoint, Resource, SecurityLaw, Finding, Evidence…
 │   ├── openapi/                parser: JSON/YAML → normalized spec ($ref, composition, security semantics)
 │   ├── model/                  security model: resources, actions, field sensitivity, ownership
+│   ├── twin/                   Security Twin graph: pure transform + layout, React Flow view
 │   └── ui/safe-html.ts         escape-by-default HTML templating used by both apps
 │
 ├── 1-security-twin/            STEP 1 browser app: spec → twin → constitution → testable model

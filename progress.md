@@ -1,5 +1,42 @@
 # Progress
 
+## 2026-09-24: Phase: Security Twin visualization ✅
+
+Scope: frontend/model visualization only. No network testing or runtime logic was added.
+
+### Done (verified by running it)
+
+| Item | Evidence |
+|---|---|
+| Pure graph transformation `src/twin/graph.ts` (model + config + laws → nodes/edges with provenance) | `tests/twin/graph.test.ts` (23 tests) |
+| Deterministic layered layout `src/twin/layout.ts` | `tests/twin/layout.test.ts` (6 tests: empty, single, row order, crossing reduction, 83-node no-overlap + wrapping, determinism) |
+| React Flow `SecurityTwinGraph` replacing the ASCII twin in Step 1 | `tests/apps/twin-graph.test.ts` (8 tests on the real bundle in jsdom) |
+| Laws carry a structured `appliesTo` scope (endpoints/resources/fields/roles) | Contract `LawScope`; graph GOVERNS edges; sample model regenerated |
+| Visual check of the production build in a real browser | Demo: 27 nodes, 49 edges, none hidden. Real mouse clicks select nodes and edges; the detail panel shows relationships, laws and provenance; law highlight dims out-of-scope entities |
+| `npm run check` | typecheck ✅ lint ✅ 178/178 tests ✅ build ✅; `npm audit` 0 vulnerabilities |
+
+### Graph semantics (only relationships present in the data)
+
+- `HAS_ROLE` identity→role (config) · `OWNS` identity→resource (config ownership map + the resource's ownership field; flagged when the map could apply to several resources)
+- `READS`/`WRITES` endpoint→resource (action inference) · `RETURNS` endpoint→resource (response schema)
+- `RELATES_TO` resource→resource (reference fields) · `EXPOSES` / `HAS_FIELD` resource→field (sensitive / ownership field)
+- `REQUIRES_ROLE` admin endpoint→privileged role (heuristic, labelled as such) · `GOVERNS` law→scope entities
+- `VIOLATES` endpoint→law **only** when findings are supplied. Step 1 has none, so none are drawn.
+
+### Fixed while verifying
+
+- `describeNode` listed a law twice when it both governs and is violated at a node (found by a unit test).
+- The toolbar said "identitys" (found by the app test).
+- The minimap covered part of the canvas on normal-sized graphs. It now appears only above 60 nodes, compact and dark.
+- Field nodes didn't show their resource, so the two `customerName` fields looked identical. The subtitle now shows `SENSITIVITY · Resource`.
+
+### Limitations
+
+- CAN_CALL (role→endpoint) is not drawn: permissions in the config are free-text action names, not bound to endpoints, so any such edge would be invented.
+- The configured ownership map is not typed by resource, so OWNS edges attach to every resource with an ownership field (noted in provenance).
+- In jsdom, tests drive clicks through DOM events. Real pointer interactions (drag, zoom, pan) were checked by hand in the browser, not automated (no Playwright yet).
+- The Step 1 bundle grew from 143 KiB to 556 KiB (React + React Flow).
+
 ## 2026-09-24: Phase: Foundation hardening ✅
 
 Scope: parser hardening, XSS safety, test infrastructure, typed contracts, docs. No network or runtime testing work was done in this phase.
@@ -52,6 +89,7 @@ Scope: parser hardening, XSS safety, test infrastructure, typed contracts, docs.
 3. Step 2 has not adopted the typed contracts (`TestCase`, `TestResult`, `Finding`, `Evidence`). Only rendering was migrated.
 4. External `$ref` (remote/file) is not supported: it produces a warning.
 5. Step 1 still shows a static "🟢 Authorized Sandbox" label regardless of state (UI-only claim).
+5a. No end-to-end browser automation (Playwright) yet; graph pointer interactions were verified manually.
 6. No backend, persistence, CI pipeline or Docker files yet.
 7. Planning docs from the audit (`docs/TARGET_ARCHITECTURE.md`, `docs/FULL_IMPLEMENTATION_PLAN.md`) were not produced.
 

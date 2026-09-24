@@ -21,6 +21,13 @@ function handlerElements(doc: Document): string[] {
     .map((el) => `${el.tagName.toLowerCase()}.${el.className}`);
 }
 
+/** Elements that only an injection could create. React Flow draws its own <svg> inside .react-flow. */
+function injectedElements(doc: Document): string[] {
+  return [...doc.querySelectorAll("img, script, iframe, object, embed, svg")]
+    .filter((el) => el.tagName.toLowerCase() !== "svg" || !el.closest(".react-flow"))
+    .map((el) => el.outerHTML.slice(0, 80));
+}
+
 function focusAll(app: LoadedApp, selector: string): void {
   app.document.querySelectorAll<HTMLElement>(selector).forEach((el) => el.focus());
 }
@@ -80,7 +87,7 @@ describe("Step 1 renders crafted spec and config content as text", () => {
 
   it("creates no injected elements or event-handler attributes", async () => {
     app = await buildCrafted();
-    expect(app.document.querySelectorAll("img, svg, script, iframe, object").length).toBe(0);
+    expect(injectedElements(app.document)).toEqual([]);
     expect(handlerElements(app.document)).toEqual(["div.drop"]);
     expect(app.document.querySelectorAll("[autofocus]").length).toBe(0);
   });
@@ -133,7 +140,7 @@ describe("Step 2 renders crafted model content as text", () => {
 
   it("creates no injected elements or event-handler attributes", async () => {
     app = await planCrafted();
-    expect(app.document.querySelectorAll("img, svg, script, iframe, object").length).toBe(0);
+    expect(injectedElements(app.document)).toEqual([]);
     expect(handlerElements(app.document)).toEqual([]);
     expect(app.document.querySelectorAll("[autofocus]").length).toBe(0);
     const credInputs = [...app.document.querySelectorAll<HTMLInputElement>("#authBox input[data-cred]")];

@@ -1,58 +1,392 @@
 {
   "schemaVersion": 1,
   "updated": "2026-09-24",
-  "phase": "foundation-hardening",
+  "phase": "security-twin-visualization",
   "commands": {
-    "install": { "cmd": "npm install", "result": "pass", "notes": "0 vulnerabilities (npm audit)" },
-    "typecheck": { "cmd": "npm run typecheck", "result": "pass" },
-    "lint": { "cmd": "npm run lint", "result": "pass" },
-    "test": { "cmd": "npm test", "result": "pass", "total": 141, "passed": 141, "failed": 0 },
-    "build": { "cmd": "npm run build", "result": "pass", "outputs": ["dist/1-security-twin/app.js", "dist/2-test-lab/app.js"] },
-    "manualBrowserCheck": { "cmd": "npm start", "result": "pass", "notes": "Step 1 demo build (5 endpoints, 4 laws) and step 2 planning (22 cases) verified in a real browser from dist/" }
+    "install": {
+      "cmd": "npm install",
+      "result": "pass",
+      "notes": "0 vulnerabilities (npm audit)"
+    },
+    "typecheck": {
+      "cmd": "npm run typecheck",
+      "result": "pass"
+    },
+    "lint": {
+      "cmd": "npm run lint",
+      "result": "pass"
+    },
+    "test": {
+      "cmd": "npm test",
+      "result": "pass",
+      "total": 178,
+      "passed": 178,
+      "failed": 0
+    },
+    "build": {
+      "cmd": "npm run build",
+      "result": "pass",
+      "outputs": [
+        "dist/1-security-twin/app.js",
+        "dist/1-security-twin/app.css",
+        "dist/2-test-lab/app.js"
+      ]
+    },
+    "manualBrowserCheck": {
+      "cmd": "npm start",
+      "result": "pass",
+      "notes": "Security Twin graph on the production build: demo renders 27 nodes / 49 edges (none hidden); real mouse clicks select a node (detail panel with 13 relationships + 2 laws) and an edge (OWNS with provenance); law highlight dims out-of-scope entities. Step 2 planning (22 cases) unchanged."
+    }
   },
   "fixtures": {
-    "A": { "file": "tests/fixtures/openapi/a-simple-oas3.json", "covers": ["OpenAPI 3.0", "server variables", "query/header params", "array response", "enum"] },
-    "B": { "file": "tests/fixtures/openapi/b-swagger2.json", "covers": ["Swagger 2.0", "root consumes/produces", "in:body", "formData", "parameter $ref", "x-nullable", "securityDefinitions"] },
-    "C": { "file": "tests/fixtures/openapi/c-nested.json", "covers": ["nested objects", "nested $ref", "nullable (3.0)", "nested sensitivity"] },
-    "D": { "file": "tests/fixtures/openapi/d-arrays.json", "covers": ["arrays of primitives", "inline array items", "$ref array items"] },
-    "E": { "file": "tests/fixtures/openapi/e-recursive.yaml", "covers": ["YAML input", "self-recursive $ref", "mutual recursion"] },
-    "F": { "file": "tests/fixtures/openapi/f-multi-path-params.json", "covers": ["multiple path parameters", "path+operation parameter merge", "undeclared path param", "trailing action verb"] },
-    "G": { "file": "tests/fixtures/openapi/g-public.json", "covers": ["security: []", "security: [{}]", "root inheritance"] },
-    "H": { "file": "tests/fixtures/openapi/h-authenticated.json", "covers": ["root security", "AND/OR requirements", "scopes", "undeclared scheme"] },
-    "I": { "file": "tests/fixtures/openapi/i-security-override.json", "covers": ["operation-level override", "operation [] overrides root"] },
-    "J": { "file": "tests/fixtures/openapi/j-request-body-ref.json", "covers": ["requestBody $ref chain", "multiple content types", "schema affix stripping"] },
-    "K": { "file": "tests/fixtures/openapi/k-response-ref.json", "covers": ["response $ref", "non-JSON media type"] },
-    "L": { "file": "tests/fixtures/openapi/l-malformed-refs.json", "covers": ["unresolved/external/circular $ref", "invalid parameters", "invalid path item"], "alsoInline": "tests/openapi/load.test.ts (invalid JSON/YAML, wrong root, bad versions, hostile structures)" },
-    "M": { "file": "tests/fixtures/openapi/m-composition-31.json", "covers": ["OpenAPI 3.1", "allOf", "oneOf", "anyOf", "type arrays with null", "enum"] }
+    "A": {
+      "file": "tests/fixtures/openapi/a-simple-oas3.json",
+      "covers": [
+        "OpenAPI 3.0",
+        "server variables",
+        "query/header params",
+        "array response",
+        "enum"
+      ]
+    },
+    "B": {
+      "file": "tests/fixtures/openapi/b-swagger2.json",
+      "covers": [
+        "Swagger 2.0",
+        "root consumes/produces",
+        "in:body",
+        "formData",
+        "parameter $ref",
+        "x-nullable",
+        "securityDefinitions"
+      ]
+    },
+    "C": {
+      "file": "tests/fixtures/openapi/c-nested.json",
+      "covers": [
+        "nested objects",
+        "nested $ref",
+        "nullable (3.0)",
+        "nested sensitivity"
+      ]
+    },
+    "D": {
+      "file": "tests/fixtures/openapi/d-arrays.json",
+      "covers": [
+        "arrays of primitives",
+        "inline array items",
+        "$ref array items"
+      ]
+    },
+    "E": {
+      "file": "tests/fixtures/openapi/e-recursive.yaml",
+      "covers": [
+        "YAML input",
+        "self-recursive $ref",
+        "mutual recursion"
+      ]
+    },
+    "F": {
+      "file": "tests/fixtures/openapi/f-multi-path-params.json",
+      "covers": [
+        "multiple path parameters",
+        "path+operation parameter merge",
+        "undeclared path param",
+        "trailing action verb"
+      ]
+    },
+    "G": {
+      "file": "tests/fixtures/openapi/g-public.json",
+      "covers": [
+        "security: []",
+        "security: [{}]",
+        "root inheritance"
+      ]
+    },
+    "H": {
+      "file": "tests/fixtures/openapi/h-authenticated.json",
+      "covers": [
+        "root security",
+        "AND/OR requirements",
+        "scopes",
+        "undeclared scheme"
+      ]
+    },
+    "I": {
+      "file": "tests/fixtures/openapi/i-security-override.json",
+      "covers": [
+        "operation-level override",
+        "operation [] overrides root"
+      ]
+    },
+    "J": {
+      "file": "tests/fixtures/openapi/j-request-body-ref.json",
+      "covers": [
+        "requestBody $ref chain",
+        "multiple content types",
+        "schema affix stripping"
+      ]
+    },
+    "K": {
+      "file": "tests/fixtures/openapi/k-response-ref.json",
+      "covers": [
+        "response $ref",
+        "non-JSON media type"
+      ]
+    },
+    "L": {
+      "file": "tests/fixtures/openapi/l-malformed-refs.json",
+      "covers": [
+        "unresolved/external/circular $ref",
+        "invalid parameters",
+        "invalid path item"
+      ],
+      "alsoInline": "tests/openapi/load.test.ts (invalid JSON/YAML, wrong root, bad versions, hostile structures)"
+    },
+    "M": {
+      "file": "tests/fixtures/openapi/m-composition-31.json",
+      "covers": [
+        "OpenAPI 3.1",
+        "allOf",
+        "oneOf",
+        "anyOf",
+        "type arrays with null",
+        "enum"
+      ]
+    }
   },
   "suites": [
-    { "file": "tests/openapi/load.test.ts", "area": "parser/loading", "tests": 13, "status": "pass", "fixtures": ["E", "L"] },
-    { "file": "tests/openapi/normalize.test.ts", "area": "parser/normalization", "tests": 18, "status": "pass", "fixtures": ["A", "B", "F", "J", "K", "L"] },
-    { "file": "tests/openapi/schema.test.ts", "area": "parser/schemas", "tests": 12, "status": "pass", "fixtures": ["C", "D", "E", "M"] },
-    { "file": "tests/openapi/security.test.ts", "area": "parser/security semantics", "tests": 12, "status": "pass", "fixtures": ["G", "H", "I"] },
-    { "file": "tests/model/resources.test.ts", "area": "security model/resources, actions, ownership", "tests": 33, "status": "pass", "fixtures": ["C", "D", "F", "J", "M", "demo spec"] },
-    { "file": "tests/model/sensitivity.test.ts", "area": "security model/field sensitivity", "tests": 25, "status": "pass" },
-    { "file": "tests/model/legacy-view.test.ts", "area": "security model/app view + path filling", "tests": 6, "status": "pass", "fixtures": ["A", "G", "demo spec"] },
-    { "file": "tests/ui/safe-html.test.ts", "area": "XSS/escaping primitives", "tests": 6, "status": "pass" },
-    { "file": "tests/apps/xss.test.ts", "area": "XSS regression (real bundles in jsdom)", "tests": 10, "status": "pass", "negativeControl": "8 of 10 fail against the pre-hardening app.js files (verified 2026-09-24)" },
-    { "file": "tests/apps/apps.test.ts", "area": "app behaviour preserved + sample drift", "tests": 6, "status": "pass" }
+    {
+      "file": "tests/openapi/load.test.ts",
+      "area": "parser/loading",
+      "tests": 13,
+      "status": "pass",
+      "fixtures": [
+        "E",
+        "L"
+      ]
+    },
+    {
+      "file": "tests/openapi/normalize.test.ts",
+      "area": "parser/normalization",
+      "tests": 18,
+      "status": "pass",
+      "fixtures": [
+        "A",
+        "B",
+        "F",
+        "J",
+        "K",
+        "L"
+      ]
+    },
+    {
+      "file": "tests/openapi/schema.test.ts",
+      "area": "parser/schemas",
+      "tests": 12,
+      "status": "pass",
+      "fixtures": [
+        "C",
+        "D",
+        "E",
+        "M"
+      ]
+    },
+    {
+      "file": "tests/openapi/security.test.ts",
+      "area": "parser/security semantics",
+      "tests": 12,
+      "status": "pass",
+      "fixtures": [
+        "G",
+        "H",
+        "I"
+      ]
+    },
+    {
+      "file": "tests/model/resources.test.ts",
+      "area": "security model/resources, actions, ownership",
+      "tests": 33,
+      "status": "pass",
+      "fixtures": [
+        "C",
+        "D",
+        "F",
+        "J",
+        "M",
+        "demo spec"
+      ]
+    },
+    {
+      "file": "tests/model/sensitivity.test.ts",
+      "area": "security model/field sensitivity",
+      "tests": 25,
+      "status": "pass"
+    },
+    {
+      "file": "tests/model/legacy-view.test.ts",
+      "area": "security model/app view + path filling",
+      "tests": 6,
+      "status": "pass",
+      "fixtures": [
+        "A",
+        "G",
+        "demo spec"
+      ]
+    },
+    {
+      "file": "tests/ui/safe-html.test.ts",
+      "area": "XSS/escaping primitives",
+      "tests": 6,
+      "status": "pass"
+    },
+    {
+      "file": "tests/apps/xss.test.ts",
+      "area": "XSS regression (real bundles in jsdom)",
+      "tests": 10,
+      "status": "pass",
+      "negativeControl": "8 of 10 fail against the pre-hardening app.js files (verified 2026-09-24)",
+      "notes": "React Flow draws its own <svg> inside .react-flow; the injection check excludes only those."
+    },
+    {
+      "file": "tests/apps/apps.test.ts",
+      "area": "app behaviour preserved + sample drift",
+      "tests": 6,
+      "status": "pass"
+    },
+    {
+      "file": "tests/twin/graph.test.ts",
+      "area": "Security Twin graph transformation (pure)",
+      "tests": 23,
+      "status": "pass",
+      "covers": [
+        "nodes from model entities",
+        "edges from relationships",
+        "duplicate relationships merged",
+        "edges to unknown entities dropped",
+        "missing optional metadata",
+        "empty model",
+        "disconnected entities preserved",
+        "findings -> VIOLATES",
+        "law scope -> GOVERNS",
+        "law highlight",
+        "field modes + sensitivity overrides",
+        "ownership ambiguity",
+        "no domain hardcoding (unrelated marketplace spec)"
+      ]
+    },
+    {
+      "file": "tests/twin/layout.test.ts",
+      "area": "Security Twin layout (pure)",
+      "tests": 6,
+      "status": "pass",
+      "covers": [
+        "empty graph",
+        "single node",
+        "row order by entity type",
+        "crossing reduction",
+        "large graph without overlap + row wrapping",
+        "determinism"
+      ]
+    },
+    {
+      "file": "tests/apps/twin-graph.test.ts",
+      "area": "Security Twin graph rendering (real Step 1 bundle in jsdom)",
+      "tests": 8,
+      "status": "pass",
+      "covers": [
+        "empty state",
+        "node counts per type",
+        "labels from parsed spec",
+        "node selection + panel navigation",
+        "edge selection + provenance",
+        "field filter",
+        "law highlight",
+        "fit/reset/rebuild without errors",
+        "arbitrary (non-demo) model"
+      ]
+    }
   ],
   "auditIssues": [
-    { "id": "BUG-09", "status": "partially-fixed", "notes": "step 1 fixed; step 2 fillPath still fills only the first parameter" },
-    { "id": "BUG-12", "status": "message-fixed", "notes": "warning text is truthful; request behaviour unchanged" },
-    { "id": "BUG-14", "status": "fixed", "test": "tests/apps/apps.test.ts" },
-    { "id": "BUG-15a", "status": "fixed", "test": "tests/openapi/normalize.test.ts" },
-    { "id": "BUG-15b", "status": "fixed", "test": "tests/openapi/normalize.test.ts" },
-    { "id": "BUG-15c", "status": "fixed", "test": "tests/openapi/security.test.ts" },
-    { "id": "BUG-15d", "status": "fixed", "test": "tests/openapi/schema.test.ts" },
-    { "id": "BUG-15e", "status": "fixed", "test": "tests/openapi/schema.test.ts, tests/model/resources.test.ts" },
-    { "id": "BUG-15f", "status": "fixed", "test": "tests/openapi/normalize.test.ts" },
-    { "id": "BUG-15g", "status": "fixed", "test": "tests/openapi/load.test.ts, tests/apps/apps.test.ts" },
-    { "id": "BUG-15h", "status": "fixed", "test": "tests/openapi/normalize.test.ts" },
-    { "id": "BUG-16", "status": "fixed", "test": "tests/model/resources.test.ts" },
-    { "id": "BUG-17", "status": "fixed", "test": "tests/model/sensitivity.test.ts" },
-    { "id": "SEC-03", "status": "fixed", "test": "tests/apps/xss.test.ts" },
-    { "id": "SEC-09", "status": "fixed", "test": "tests/apps/xss.test.ts" },
-    { "id": "BUG-01..08, BUG-10, BUG-11, SEC-01, SEC-02, SEC-04, SEC-05", "status": "open", "notes": "step 2 execution/finding logic, out of scope for this phase" }
+    {
+      "id": "BUG-09",
+      "status": "partially-fixed",
+      "notes": "step 1 fixed; step 2 fillPath still fills only the first parameter"
+    },
+    {
+      "id": "BUG-12",
+      "status": "message-fixed",
+      "notes": "warning text is truthful; request behaviour unchanged"
+    },
+    {
+      "id": "BUG-14",
+      "status": "fixed",
+      "test": "tests/apps/apps.test.ts"
+    },
+    {
+      "id": "BUG-15a",
+      "status": "fixed",
+      "test": "tests/openapi/normalize.test.ts"
+    },
+    {
+      "id": "BUG-15b",
+      "status": "fixed",
+      "test": "tests/openapi/normalize.test.ts"
+    },
+    {
+      "id": "BUG-15c",
+      "status": "fixed",
+      "test": "tests/openapi/security.test.ts"
+    },
+    {
+      "id": "BUG-15d",
+      "status": "fixed",
+      "test": "tests/openapi/schema.test.ts"
+    },
+    {
+      "id": "BUG-15e",
+      "status": "fixed",
+      "test": "tests/openapi/schema.test.ts, tests/model/resources.test.ts"
+    },
+    {
+      "id": "BUG-15f",
+      "status": "fixed",
+      "test": "tests/openapi/normalize.test.ts"
+    },
+    {
+      "id": "BUG-15g",
+      "status": "fixed",
+      "test": "tests/openapi/load.test.ts, tests/apps/apps.test.ts"
+    },
+    {
+      "id": "BUG-15h",
+      "status": "fixed",
+      "test": "tests/openapi/normalize.test.ts"
+    },
+    {
+      "id": "BUG-16",
+      "status": "fixed",
+      "test": "tests/model/resources.test.ts"
+    },
+    {
+      "id": "BUG-17",
+      "status": "fixed",
+      "test": "tests/model/sensitivity.test.ts"
+    },
+    {
+      "id": "SEC-03",
+      "status": "fixed",
+      "test": "tests/apps/xss.test.ts"
+    },
+    {
+      "id": "SEC-09",
+      "status": "fixed",
+      "test": "tests/apps/xss.test.ts"
+    },
+    {
+      "id": "BUG-01..08, BUG-10, BUG-11, SEC-01, SEC-02, SEC-04, SEC-05",
+      "status": "open",
+      "notes": "step 2 execution/finding logic, out of scope for this phase"
+    }
   ]
 }

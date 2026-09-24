@@ -182,6 +182,14 @@ export type LawCategory = "BOLA" | "ADMIN" | "DATA" | "AUTHN" | "ROLE";
 export type Severity = "Low" | "Medium" | "High" | "Critical";
 export type Confidence = "HIGH" | "MEDIUM" | "LOW";
 
+/** Model entities a law governs. Field entries are "Resource.fieldPath". */
+export interface LawScope {
+  endpoints: string[];
+  resources: string[];
+  fields: string[];
+  roles: string[];
+}
+
 export interface SecurityLaw {
   id: string;
   category: LawCategory;
@@ -192,7 +200,7 @@ export interface SecurityLaw {
   source: string;
   confidence: Confidence;
   score: number;
-  appliesTo: string[];
+  appliesTo: LawScope;
 }
 
 export type ExpectedOutcome = "ALLOW" | "DENY";

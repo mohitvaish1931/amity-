@@ -523,6 +523,22 @@
       "score": 90,
       "reason": "Ownership field 'customerId' + configured map isolates Order.",
       "invariant": "∀ Customer c, order o: ALLOW(GET /users/{id}) ⟺ owner(o)==c",
+      "appliesTo": {
+        "endpoints": [
+          "EP-001",
+          "EP-002",
+          "EP-004"
+        ],
+        "resources": [
+          "Order"
+        ],
+        "fields": [
+          "Order.customerId"
+        ],
+        "roles": [
+          "Customer"
+        ]
+      },
       "tests": [
         {
           "given": "authenticated as customer_001 (User A)",
@@ -551,6 +567,16 @@
       "score": 90,
       "reason": "Admin endpoints isolated to role 'Administrator'.",
       "invariant": "role!=Administrator → DENY(POST /admin/refund)",
+      "appliesTo": {
+        "endpoints": [
+          "EP-005"
+        ],
+        "resources": [],
+        "fields": [],
+        "roles": [
+          "Customer"
+        ]
+      },
       "tests": [
         {
           "given": "authenticated as customer_001 (non-admin)",
@@ -574,6 +600,29 @@
       "score": 60,
       "reason": "Heuristic — RISK until Part-2 runtime proof.",
       "invariant": "IF owner(o)!=caller THEN response MUST NOT contain PERSONAL/SENSITIVE",
+      "appliesTo": {
+        "endpoints": [
+          "EP-001",
+          "EP-002",
+          "EP-004"
+        ],
+        "resources": [
+          "User",
+          "Order",
+          "Invoice"
+        ],
+        "fields": [
+          "User.customerName",
+          "User.phone",
+          "User.address",
+          "Order.customerName",
+          "Order.phone",
+          "Order.address",
+          "Order.paymentMetadata",
+          "Invoice.paymentMetadata"
+        ],
+        "roles": []
+      },
       "tests": [
         {
           "given": "authenticated as customer_001",
@@ -592,6 +641,18 @@
       "score": 90,
       "reason": "Declared security requirement (operation or root level).",
       "invariant": "unauthenticated → DENY(protected)",
+      "appliesTo": {
+        "endpoints": [
+          "EP-001",
+          "EP-002",
+          "EP-003",
+          "EP-004",
+          "EP-005"
+        ],
+        "resources": [],
+        "fields": [],
+        "roles": []
+      },
       "tests": [
         {
           "given": "no token",
