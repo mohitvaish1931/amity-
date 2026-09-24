@@ -16,6 +16,8 @@ amity/
 │   ├── openapi/                parser: JSON/YAML → normalized spec ($ref, composition, security semantics)
 │   ├── model/                  security model: resources, actions, field sensitivity, ownership
 │   ├── twin/                   Security Twin graph: pure transform + layout, React Flow view
+│   ├── paths/                  fillPath: the single path-template filler (strict, encoded)
+│   ├── target/                 target authorization state (UNKNOWN / CONFIGURED / CONFIRMED)
 │   └── ui/safe-html.ts         escape-by-default HTML templating used by both apps
 │
 ├── 1-security-twin/            STEP 1 browser app: spec → twin → constitution → testable model
@@ -71,6 +73,11 @@ npm run sample:regen
 ## What the parser supports
 
 OpenAPI 3.0 / 3.1 and Swagger 2.0, as JSON or YAML: local `$ref` everywhere (schemas, parameters, request bodies, responses, path items, security schemes), recursive and mutually recursive schemas, `allOf`/`oneOf`/`anyOf`, nested objects, arrays, `nullable` (3.0, 3.1 type arrays, Swagger `x-nullable`), enums, path/query/header/cookie parameters with path-level + operation-level merging, multiple path parameters, content types, and correct security semantics (root inheritance, operation override, `[]` = public, `[{}]` = optional auth, AND/OR requirements). Malformed input produces errors or warnings, never a crash.
+
+## Path parameters and target state
+
+- **Path templates** are filled only by `fillPath` in `src/paths`. It matches parameters by exact name, percent-encodes each value as one segment, rejects dot-segments and empty values, and throws `MissingPathParameterError` for anything missing. Step 2 fills an object id into an endpoint's last parameter. Endpoints needing other values it doesn't have are skipped, with the reason shown in the planner.
+- **Target authorization** shown in Step 1 is derived state. A valid URL is only *Sandbox target configured, authorization status unknown*. *Authorization confirmed* needs a matching authorization record, which nothing in the apps produces yet.
 
 ## Current limitations
 

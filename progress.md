@@ -1,5 +1,41 @@
 # Progress
 
+## 2026-09-24: Phase: Small foundation blockers ✅
+
+Scope: UI truthfulness and path-template handling. No runtime or network features were added.
+
+### Sandbox authorization state (Step 1)
+
+- Removed the static `🟢 Authorized Sandbox` label. The banner is now a policy statement (`🛡 POLICY: use only sandbox targets you are authorized to test`), not a status.
+- New typed model `src/target/authorization.ts`: `TargetAuthorizationState = "UNKNOWN" | "CONFIGURED" | "CONFIRMED"`.
+  - `UNKNOWN`: no URL, or an invalid one (non-http(s), unparsable, or with embedded credentials).
+  - `CONFIGURED`: a valid URL. The label says "Authorization status unknown", because configuring a URL proves nothing.
+  - `CONFIRMED`: only with a complete authorization record for the same normalized target. **Nothing in the apps produces such a record yet**, so Step 1 can never show it.
+- The Connect card, dashboard and exported model (`targetAuthorization`) render from this state, and it updates as the URL is typed.
+
+### Path parameters
+
+- One implementation, `src/paths/index.ts`: `fillPath(template, params, { onMissing })`, plus `pathParamNames` and `lastPathParam`.
+  - Exact-name matching (`{id}` never touches `{userId}`), template order, repeated params, strings/numbers/bigints.
+  - Values are percent-encoded as a single segment (`/` → `%2F`, space → `%20`).
+  - Inputs are never mutated.
+  - Missing values raise `MissingPathParameterError`, listing every missing name. Unsafe values raise `InvalidPathParameterError`: empty, `.`/`..` dot-segments (URL parsers resolve them even when encoded), non-finite numbers, objects.
+  - `onMissing: "keep"` exists for human-readable display only.
+- Removed: Step 2's first-parameter-only `fillPath`/`idParam`, and `src/model`'s lenient `fillPathTemplate`. Step 1's `fillObjectId` now uses `fillPath` (display mode).
+- Step 2 behaviour:
+  - An object id fills the endpoint's **last** parameter (the addressed object).
+  - Endpoints with other parameters that have no known values are **skipped with a reason** in the planner. Values are never invented.
+  - Admin endpoints with path params are handled the same way. They were previously planned with a literal `{param}` in the URL.
+  - Anonymous (AUTHN) probes fill **every** parameter with the documented placeholder `1`, not just the first.
+  - The matrix shows "not planned — missing path parameter values" instead of a broken path.
+- Not consolidated on purpose: OpenAPI **server URL variables** (`src/openapi/normalize.ts`). These are server templates with spec-defined defaults that must not be percent-encoded, not path parameters.
+
+### Verification
+
+- `npm run check`: typecheck ✅ lint ✅ **207/207** tests ✅ build ✅
+- Negative control: the new app tests fail **6 of 7** against the previous commit's code. The seventh, "demo plan unchanged", is meant to pass on both.
+- Manual check of the production build: Step 1 shows the CONFIGURED state wording, the graph renders (27 nodes, 49 edges), law test paths are filled, and there are no console errors. Step 2 demo plan unchanged (22 cases). A two-parameter endpoint is skipped with a reason, and no planned path contains `{`.
+
 ## 2026-09-24: Phase: Security Twin visualization ✅
 
 Scope: frontend/model visualization only. No network testing or runtime logic was added.
@@ -85,10 +121,10 @@ Scope: parser hardening, XSS safety, test infrastructure, typed contracts, docs.
 ## Open items / remaining blockers
 
 1. **Step 2 execution and findings are still the prototype.** It runs in the browser, approval is client-side only, confirmation repeats only the last request and compares status codes only, mock findings are labelled CONFIRMED, and HTTP 200 alone is treated as exposure (audit BUG-01…08, BUG-10, BUG-11, SEC-01, SEC-02, SEC-04, SEC-05). Not touched in this phase by design.
-2. Step 2 `fillPath` still fills only the first path parameter (BUG-09, step 2 part).
+2. ~~Step 2 `fillPath` still fills only the first path parameter (BUG-09, step 2 part).~~ Fixed in "Small foundation blockers".
 3. Step 2 has not adopted the typed contracts (`TestCase`, `TestResult`, `Finding`, `Evidence`). Only rendering was migrated.
 4. External `$ref` (remote/file) is not supported: it produces a warning.
-5. Step 1 still shows a static "🟢 Authorized Sandbox" label regardless of state (UI-only claim).
+5. ~~Step 1 still shows a static "🟢 Authorized Sandbox" label regardless of state.~~ Fixed in "Small foundation blockers". Step 2's banner still uses the older "🟢 AUTHORIZED SANDBOX ONLY" wording (its live-run approval checkbox is separate and unchanged).
 5a. No end-to-end browser automation (Playwright) yet; graph pointer interactions were verified manually.
 6. No backend, persistence, CI pipeline or Docker files yet.
 7. Planning docs from the audit (`docs/TARGET_ARCHITECTURE.md`, `docs/FULL_IMPLEMENTATION_PLAN.md`) were not produced.

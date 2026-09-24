@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "updated": "2026-09-24",
-  "phase": "security-twin-visualization",
+  "phase": "small-foundation-blockers",
   "commands": {
     "install": {
       "cmd": "npm install",
@@ -19,8 +19,8 @@
     "test": {
       "cmd": "npm test",
       "result": "pass",
-      "total": 178,
-      "passed": 178,
+      "total": 207,
+      "passed": 207,
       "failed": 0
     },
     "build": {
@@ -33,9 +33,9 @@
       ]
     },
     "manualBrowserCheck": {
-      "cmd": "npm start",
+      "cmd": "node scripts/serve.mjs (after npm run build)",
       "result": "pass",
-      "notes": "Security Twin graph on the production build: demo renders 27 nodes / 49 edges (none hidden); real mouse clicks select a node (detail panel with 13 relationships + 2 laws) and an edge (OWNS with provenance); law highlight dims out-of-scope entities. Step 2 planning (22 cases) unchanged."
+      "notes": "Step 1: banner is a policy statement; target label CONFIGURED \"Sandbox target configured / Authorization status unknown\" (also on dashboard); graph 27 nodes / 49 edges; law test paths filled; no console errors. Step 2: demo plan unchanged (22 cases); added two-parameter endpoint -> BOLA/DATA skipped with reason, no planned path contains \"{\", matrix explains; no console errors."
     }
   },
   "fixtures": {
@@ -225,14 +225,15 @@
     },
     {
       "file": "tests/model/legacy-view.test.ts",
-      "area": "security model/app view + path filling",
-      "tests": 6,
+      "area": "security model/app view",
+      "tests": 4,
       "status": "pass",
       "fixtures": [
         "A",
         "G",
         "demo spec"
-      ]
+      ],
+      "notes": "fillPathTemplate tests removed with the function (superseded by tests/paths/fill-path.test.ts)"
     },
     {
       "file": "tests/ui/safe-html.test.ts",
@@ -305,13 +306,59 @@
         "fit/reset/rebuild without errors",
         "arbitrary (non-demo) model"
       ]
+    },
+    {
+      "file": "tests/paths/fill-path.test.ts",
+      "area": "path templates (pure)",
+      "tests": 19,
+      "status": "pass",
+      "covers": [
+        "1 one param",
+        "2 two params",
+        "3 three+ params",
+        "4 params key order vs template order",
+        "5 numeric + bigint",
+        "6 spaces",
+        "7 special characters + unicode",
+        "8 slash encoding",
+        "9 missing params (all listed, typed error)",
+        "10 empty template",
+        "11 no params",
+        "12 prefix names ({id} vs {postId})",
+        "repeated params",
+        "no mutation",
+        "dot-segments/empty/non-finite/object rejected",
+        "own properties only",
+        "display mode keeps unfilled params",
+        "helpers"
+      ]
+    },
+    {
+      "file": "tests/target/authorization.test.ts",
+      "area": "target authorization state (pure)",
+      "tests": 5,
+      "status": "pass",
+      "covers": [
+        "UNKNOWN without target",
+        "UNKNOWN for invalid/unsupported/credentialed URLs",
+        "CONFIGURED for valid URL",
+        "CONFIRMED only with matching complete record",
+        "URL normalization"
+      ]
+    },
+    {
+      "file": "tests/apps/foundation-blockers.test.ts",
+      "area": "Step 1 target state + Step 2 multi-param planning (real bundles)",
+      "tests": 7,
+      "status": "pass",
+      "negativeControl": "6 of 7 fail against commit a51948a (the demo-preservation test passes on both by design)"
     }
   ],
   "auditIssues": [
     {
       "id": "BUG-09",
-      "status": "partially-fixed",
-      "notes": "step 1 fixed; step 2 fillPath still fills only the first parameter"
+      "status": "fixed",
+      "test": "tests/paths/fill-path.test.ts, tests/apps/foundation-blockers.test.ts"
     },
     {
       "id": "BUG-12",

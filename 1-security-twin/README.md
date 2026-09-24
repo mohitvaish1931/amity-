@@ -27,7 +27,9 @@ Demo instance data lives only in `samples/sample-swagger.json` + `samples/sample
 Proof: Seller/Support + Product/tenantId spec produces Seller laws with zero demo strings.
 
 ## Sandbox restriction
-Banner `AUTHORIZED SANDBOX ONLY` is always visible. `sandboxOnly:true` is in exported JSON.
+The banner states the policy (authorized sandbox targets only). The target label is derived state, not a claim:
+`UNKNOWN` (no/invalid URL), `CONFIGURED` (valid URL, authorization unknown) or `CONFIRMED` (only with a matching
+authorization record, which nothing produces yet). The exported JSON carries `sandboxOnly:true` and `targetAuthorization`.
 
 ## Files
 - `index.html`, `styles.css`, `app.js`

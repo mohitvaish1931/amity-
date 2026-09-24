@@ -15,6 +15,7 @@ No new runtime or network capability was added in this phase. What exists today:
 
 | Area | State |
 |---|---|
+| Target authorization label (Step 1) | Rendered from `TargetAuthorizationState`. A valid URL is only `CONFIGURED` ("Authorization status unknown"). `CONFIRMED` requires a matching authorization record, and no component produces one yet. |
 | Step 1 (Security Twin) | Static analysis only. The optional **Test Connection** button sends one GET to the entered URL. When the URL does not look like a sandbox, the warning now says exactly that, instead of falsely claiming "production blocked". |
 | Step 2 planning | Static. Builds test cases from the model and makes no requests. |
 | Step 2 execution (prototype) | Unchanged. It runs in the browser, is gated by a per-URL approval checkbox, and supports a local mock mode. The audit's issues with it are still open (browser-side execution, client-side-only approval, weak confirmation; see docs/REPOSITORY_AUDIT.md). |

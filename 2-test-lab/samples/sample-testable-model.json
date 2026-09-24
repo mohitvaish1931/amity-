@@ -2,6 +2,11 @@
   "version": "part1-v5-typed",
   "sandboxOnly": true,
   "sandboxBaseUrl": "https://sandbox-api.example.com",
+  "targetAuthorization": {
+    "state": "CONFIGURED",
+    "label": "Sandbox target configured",
+    "detail": "Authorization status unknown: configuring a URL does not show that you are authorized to test it."
+  },
   "sandboxCheck": {
     "status": "idle"
   },

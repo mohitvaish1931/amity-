@@ -50,6 +50,8 @@ Status as of the foundation-hardening phase (2026-09-24). This describes what ex
 | `src/twin/layout.ts` | Deterministic layered layout: rows by entity type, barycenter ordering to reduce crossings, wrapping of long rows, no overlaps. |
 | `src/twin/SecurityTwinGraph.tsx` | React Flow view: custom node shapes per type, detail panel (metadata, relationships, relevant laws, provenance), field filter (key / all / none), law highlighting, fit view, reset layout, minimap for large graphs, and an error boundary so a graph failure never breaks the page. |
 | `src/twin/mount.tsx` | `mountSecurityTwinGraph(el)` lets the vanilla Step 1 app render the React island. The graph is recomputed only when the app passes a new model (on build/rebuild). |
+| `src/paths/index.ts` | The only path-template filler: `fillPath` (exact-name, encoded, strict by default; `onMissing: "keep"` for display), `pathParamNames`, `lastPathParam`, `MissingPathParameterError`, `InvalidPathParameterError`. Used by both apps. |
+| `src/target/authorization.ts` | `TargetAuthorizationState` (`UNKNOWN` / `CONFIGURED` / `CONFIRMED`) derived from the configured URL and an optional authorization record. Step 1 renders its target label from this. |
 | `src/ui/safe-html.ts` | Escape-by-default templating. Plain strings are always escaped. Only `html```-built fragments reach `innerHTML`, through `setHtml`. |
 | `1-security-twin/app.js` | UI plus twin, inference and law builders on top of the model. Rebuilds from spec text on every change, so warnings never accumulate. |
 | `2-test-lab/app.js` | UI plus the prototype planner, executor and finding logic. Only rendering was changed in this phase. |

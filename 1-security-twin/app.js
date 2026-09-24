@@ -2,7 +2,9 @@
 // Spec parsing and the API/security model come from src/ (typed, tested). This file builds the twin,
 // inferences and laws on top of that model and renders them. All rendering goes through html``/setHtml,
 // which escape every interpolated value.
-import { analyzeSpecText, fillPathTemplate } from "../src/model/index";
+import { analyzeSpecText } from "../src/model/index";
+import { fillPath, lastPathParam } from "../src/paths/index";
+import { deriveTargetAuthorization } from "../src/target/authorization";
 import { html, joinHtml, setHtml } from "../src/ui/safe-html";
 import { mountSecurityTwinGraph } from "../src/twin/mount";
 
@@ -30,10 +32,20 @@ function privilegedActions(){
   return actions.filter(act=>{ const vals = roles.map(r=>(perms[r]||{})[act]); return vals.includes(true)&&vals.includes(false); });
 }
 function ownershipSample(n=3){ return Object.entries(cfgOwnership()).slice(0,n).map(([o,c])=>`${o}→${idToName(c)}`).join("; ")||"none configured"; }
-/** Put an object id into the last path parameter (the object being addressed); parent parameters stay as templates. */
+/** Display only: the object id fills the last path parameter (the addressed object); parent parameters stay as {name}. */
 function fillObjectId(path, id){
-  const names = [...path.matchAll(/\{([^}]+)\}/g)].map(m=>m[1]);
-  return names.length ? fillPathTemplate(path, { [names[names.length-1]]: String(id) }) : path;
+  const last = lastPathParam(path);
+  return last ? fillPath(path, { [last]: String(id) }, { onMissing:"keep" }) : path;
+}
+/** Authorization state for the configured target, derived from real data only (no confirmation source exists yet). */
+function targetAuthorization(){ return deriveTargetAuthorization($("baseUrl").value, null); }
+function renderTargetAuth(){
+  const a = targetAuthorization();
+  const box = $("targetAuthState");
+  box.dataset.state = a.state;
+  const cls = a.state==="CONFIRMED" ? "ok" : a.state==="CONFIGURED" ? "sub" : "warn";
+  const icon = a.state==="CONFIRMED" ? "✅" : a.state==="CONFIGURED" ? "ℹ" : "⚠";
+  setHtml(box, html`<span class="${cls}">${icon} ${a.label}</span><span class="sub" style="margin:0 0 0 8px">${a.detail}</span>`);
 }
 function isIdGet(e){ return e.method==="GET"&&/\{.+\}/.test(e.path); }
 function authLabel(e){ return e.authMode==="required"?"Required":e.authMode==="optional"?"Optional":"Open"; }
@@ -224,11 +236,13 @@ function buildDashboard(){
   const owned = Object.keys(res).filter(r=>res[r].ownershipField).length;
   const readiness = eps.length? Math.round(100*(0.3*Math.min(1,Object.keys(res).length/3)+0.3*(prot/eps.length)+0.2*(owned/Math.max(1,Object.keys(res).length))+0.2*Math.min(1,STATE.laws.length/5))) : 0;
   return { endpoints:eps.length, resources:Object.keys(res).length, protected:prot, open, fields, sens, high, med, owned, readiness, sandbox:STATE.sandbox.status,
-    roles:distinctRoles(), adminRole:detectAdminRole(), identities:cfgIdentities().length };
+    authorization:targetAuthorization().label, roles:distinctRoles(), adminRole:detectAdminRole(), identities:cfgIdentities().length };
 }
 
 function buildTestableModel(){
+  const auth = deriveTargetAuthorization(STATE.baseUrl, null);
   return { version:"part1-v5-typed", sandboxOnly:true, sandboxBaseUrl:STATE.baseUrl,
+    targetAuthorization:{ state:auth.state, label:auth.label, detail:auth.detail },
     sandboxCheck:STATE.sandbox, specInfo:STATE.specInfo, warnings:STATE.warnings,
     testIdentities:cfgIdentities(), permissions:cfgPermissions(),
     ownership:Object.entries(cfgOwnership()).map(([objectId,ownerId])=>({objectId,ownerId,ownerName:idToName(ownerId)})),
@@ -249,7 +263,7 @@ function renderDashboard(){
     <div class="tile"><b>${d.fields}</b><span class="sub">fields (${d.sens} sens)</span></div>
     <div class="tile"><b>${d.high}H/${d.med}M</b><span class="sub">laws</span></div>
     <div class="tile"><b>${d.identities}</b><span class="sub">identities (${d.roles.join(", ")||"—"})</span></div></div>
-    <p class="sub">Part-2 readiness: <b>${d.readiness}%</b> · sandbox: ${d.sandbox} · admin role: ${d.adminRole||"none"} ${STATE.warnings.length?`· ⚠ ${STATE.warnings.length} warnings`:""}</p>
+    <p class="sub">Part-2 readiness: <b>${d.readiness}%</b> · sandbox: ${d.sandbox} · target: ${d.authorization} · admin role: ${d.adminRole||"none"} ${STATE.warnings.length?`· ⚠ ${STATE.warnings.length} warnings`:""}</p>
     <div class="bar"><i style="width:${d.readiness}%"></i></div>`);
 }
 function renderDiscovery(){
@@ -416,7 +430,13 @@ window.addEventListener("DOMContentLoaded", ()=>{
     $("permissionsEditor").value = JSON.stringify(cfg.permissions,null,2);
     $("ownershipEditor").value = JSON.stringify(cfg.ownership,null,2);
     if(!$("baseUrl").value) $("baseUrl").value="https://sandbox-api.example.com";
+    renderTargetAuth();
   };
+  $("baseUrl").addEventListener("input", ()=>{
+    renderTargetAuth();
+    if(STATE.dashboard){ STATE.dashboard = buildDashboard(); renderDashboard(); }
+  });
+  renderTargetAuth();
   $("fileInput").addEventListener("change", e=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>{ $("swaggerText").value=rd.result; }; rd.readAsText(f); });
   $("dl4").onclick=()=>download("testable-security-model.json",$("out4").textContent);
   $("copy4").onclick=()=>{ navigator.clipboard.writeText($("out4").textContent); alert("Testable Security Model copied — paste into Part 2."); };

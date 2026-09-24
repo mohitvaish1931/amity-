@@ -3,6 +3,7 @@
 // Sandbox gate: explicit user approval of the exact URL — never a substring heuristic.
 // Hypotheses: heuristic planner by default; optional user-provided LLM endpoint only enhances wording.
 import { html, joinHtml, setHtml } from "../src/ui/safe-html";
+import { PathParameterError, fillPath, lastPathParam, pathParamNames } from "../src/paths/index";
 const $ = (id) => document.getElementById(id);
 let S = { model:null, tests:[], results:{}, findings:[], running:false, sel:null, execMode:"mock", mockMode:"vulnerable", sandboxUrl:"",
   auth:{ scheme:"bearer", apiKeyName:"X-API-Key", cookieName:"session", creds:{} }, cookieAck:false,
@@ -35,8 +36,13 @@ function authnHeaderPreview(test){
   if(S.auth.scheme==="apiKey") return (S.auth.apiKeyName||"X-API-Key")+": <key-for-"+test.identityId+">";
   return "(scheme none)";
 }
-function idParam(tpl){ const m=/\{([^}]+)\}/.exec(tpl||""); return m?m[1]:"id"; }
-function fillPath(tpl,id){ return (tpl||"").replace(/\{[^}]+\}/, id); }
+// Path building goes through src/paths (fillPath). Unknown path values are never invented:
+// an object id fills only the last parameter (the addressed object); anything else throws MissingPathParameterError.
+function objectPath(template, objectId){ const last=lastPathParam(template); return fillPath(template, last?{[last]:objectId}:{}); }
+/** Anonymous-access probes: every parameter gets the same documented placeholder value. */
+function placeholderPath(template, value){ return fillPath(template, Object.fromEntries(pathParamNames(template).map(n=>[n,value]))); }
+/** Display only (matrix): unfilled parameters stay as {name}. */
+function displayObjectPath(template, objectId){ const last=lastPathParam(template); return fillPath(template, last?{[last]:objectId}:{}, {onMissing:"keep"}); }
 function nameOf(id){ const f=(S.model.testIdentities||[]).find(i=>i.id===id); return f?(f.name||id):id; }
 function ownerOf(objId){ const f=(S.model.ownership||[]).find(o=>String(o.objectId)===String(objId)); return f?f.ownerId:null; }
 function sensFields(){ const out=[]; const R=S.model.resources||{}; Object.keys(R).forEach(rn=>Object.keys((R[rn]||{fields:{}}).fields||{}).forEach(f=>{ const v=R[rn].fields[f]; if(v.sensitivity==="PERSONAL"||v.sensitivity==="SENSITIVE") out.push(rn+"."+f); })); return out; }
@@ -71,7 +77,9 @@ function allAdminEps(){ return (S.model.endpoints||[]).filter(e=>e.action==="Adm
 function H(kind,ctx){ return { text:heuristicHypothesis(kind,ctx), source:"heuristic" }; }
 function planTests(){
   const M=S.model; const tests=[]; let n=1; const tid=()=>"T-"+String(n++).padStart(3,"0");
-  S.warnings2=null;
+  S.planWarnings=[];
+  // Paths are built before an endpoint's cases are created, so an endpoint is either fully planned or skipped with a reason.
+  const skip=(cat,ep,e)=>{ if(!(e instanceof PathParameterError)) throw e; S.planWarnings.push(`${cat}: skipped ${ep.method} ${ep.path} (${e.message})`); };
   const ownEntries=M.ownership||[];
   const base=baseIdentity(), adm=adminIdentity();
   const idGets=allIdGets(), adminEps=allAdminEps(); // ALL eligible endpoints, not just the first
@@ -84,38 +92,40 @@ function planTests(){
         const mine=ownEntries.find(o=>base&&o.ownerId===base.id)||ownEntries[0];
         const foreign=ownEntries.find(o=>mine&&o.ownerId!==mine.ownerId);
         const of=(M.twin.resources[idGet.resource]||{}).ownershipField||"ownership field";
+        let P; try{ P={ mine:mine&&objectPath(idGet.path,mine.objectId), foreign:foreign&&objectPath(idGet.path,foreign.objectId), anon:objectPath(idGet.path,(mine||{objectId:"1"}).objectId) }; }catch(e){ skip(cat,idGet,e); continue; }
         if(mine) tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"BOLA_BASE",priority:1,
           hypothesis:H("BOLA_BASE",{actor:base.id,obj:mine.objectId,ep:`${idGet.method} ${idGet.path}`}),
-          given:`authenticated as ${base.id} (${nameOf(base.id)})`,whenText:`${idGet.method} ${fillPath(idGet.path,mine.objectId)} (own)`,expectText:"ALLOW",
-          target:{method:idGet.method,pathTemplate:idGet.path,path:fillPath(idGet.path,mine.objectId),resource:idGet.resource},
+          given:`authenticated as ${base.id} (${nameOf(base.id)})`,whenText:`${idGet.method} ${P.mine} (own)`,expectText:"ALLOW",
+          target:{method:idGet.method,pathTemplate:idGet.path,path:P.mine,resource:idGet.resource},
           identityId:base.id,mutation:{type:"none",reason:"baseline legitimate access"},expectedDeny:false,objectId:mine.objectId}));
         if(mine&&foreign) tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"BOLA",priority:1,
           hypothesis:H("BOLA",{actor:base.id,obj:foreign.objectId,owner:foreign.ownerId,ofield:of,ep:`${idGet.method} ${idGet.path}`}),
-          given:`authenticated as ${base.id} (${nameOf(base.id)})`,whenText:`${idGet.method} ${fillPath(idGet.path,foreign.objectId)} (foreign, owner=${foreign.ownerId})`,expectText:"DENY 403/404",
-          target:{method:idGet.method,pathTemplate:idGet.path,path:fillPath(idGet.path,foreign.objectId),resource:idGet.resource},
-          identityId:base.id,mutation:{type:"ownership",field:idParam(idGet.path),from:mine.objectId,to:foreign.objectId,reason:`object ${foreign.objectId} owned by ${foreign.ownerId} (${nameOf(foreign.ownerId)})`},expectedDeny:true,objectId:foreign.objectId,baseObjectId:mine.objectId}));
+          given:`authenticated as ${base.id} (${nameOf(base.id)})`,whenText:`${idGet.method} ${P.foreign} (foreign, owner=${foreign.ownerId})`,expectText:"DENY 403/404",
+          target:{method:idGet.method,pathTemplate:idGet.path,path:P.foreign,resource:idGet.resource},
+          identityId:base.id,mutation:{type:"ownership",field:lastPathParam(idGet.path),from:mine.objectId,to:foreign.objectId,reason:`object ${foreign.objectId} owned by ${foreign.ownerId} (${nameOf(foreign.ownerId)})`},expectedDeny:true,objectId:foreign.objectId,baseObjectId:mine.objectId}));
         tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"AUTHN",priority:2,
-          hypothesis:H("AUTHN",{ep:`${idGet.method} ${idGet.path}`}),given:"unauthenticated",whenText:`${idGet.method} ${fillPath(idGet.path,(mine||{objectId:"1"}).objectId)}`,expectText:"DENY 401",
-          target:{method:idGet.method,pathTemplate:idGet.path,path:fillPath(idGet.path,(mine||{objectId:"1"}).objectId),resource:idGet.resource},
+          hypothesis:H("AUTHN",{ep:`${idGet.method} ${idGet.path}`}),given:"unauthenticated",whenText:`${idGet.method} ${P.anon}`,expectText:"DENY 401",
+          target:{method:idGet.method,pathTemplate:idGet.path,path:P.anon,resource:idGet.resource},
           identityId:null,mutation:{type:"auth-strip",from:base?base.id:"identity",to:"anonymous",reason:"no credential sent"},expectedDeny:true,objectId:(mine||{objectId:"1"}).objectId}));
         if(mine&&foreign) tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"SEQUENCE",priority:2,
           hypothesis:H("SEQUENCE",{actor:base.id,ep:`${idGet.method} ${idGet.path}`}),given:`authenticated as ${base.id}, then context switch`,whenText:`GET own ${mine.objectId} → reuse foreign ${foreign.objectId}`,expectText:"step1 ALLOW, step2 DENY",
-          target:{method:idGet.method,pathTemplate:idGet.path,path:fillPath(idGet.path,foreign.objectId),resource:idGet.resource},
-          identityId:base.id,mutation:{type:"sequence",steps:[`1. ${idGet.method} ${fillPath(idGet.path,mine.objectId)} as ${base.id} → expect ALLOW`,`2. ${idGet.method} ${fillPath(idGet.path,foreign.objectId)} as ${base.id} → expect DENY`],reason:"authorization must be re-evaluated per object"},expectedDeny:true,objectId:foreign.objectId,baseObjectId:mine.objectId,
-          steps:[{label:"step 1 — legitimate access (own)",path:fillPath(idGet.path,mine.objectId),objectId:mine.objectId,expectedDeny:false},{label:"step 2 — context switch, reuse foreign id",path:fillPath(idGet.path,foreign.objectId),objectId:foreign.objectId,expectedDeny:true}]}));
+          target:{method:idGet.method,pathTemplate:idGet.path,path:P.foreign,resource:idGet.resource},
+          identityId:base.id,mutation:{type:"sequence",steps:[`1. ${idGet.method} ${P.mine} as ${base.id} → expect ALLOW`,`2. ${idGet.method} ${P.foreign} as ${base.id} → expect DENY`],reason:"authorization must be re-evaluated per object"},expectedDeny:true,objectId:foreign.objectId,baseObjectId:mine.objectId,
+          steps:[{label:"step 1 — legitimate access (own)",path:P.mine,objectId:mine.objectId,expectedDeny:false},{label:"step 2 — context switch, reuse foreign id",path:P.foreign,objectId:foreign.objectId,expectedDeny:true}]}));
       }
     }
     if(cat==="ADMIN"&&adminEps.length&&base){
       for(const adminEp of adminEps){
+        let adminPath; try{ adminPath=fillPath(adminEp.path,{}); }catch(e){ skip(cat,adminEp,e); continue; }
         tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"ADMIN",priority:1,
           hypothesis:H("ADMIN",{adminRole:adminRole(),actor:base.id,ep:`${adminEp.method} ${adminEp.path}`}),
           given:`authenticated as ${base.id} (${base.role}, non-admin)`,whenText:`${adminEp.method} ${adminEp.path}`,expectText:"DENY 403",
-          target:{method:adminEp.method,pathTemplate:adminEp.path,path:adminEp.path,resource:adminEp.resource},
+          target:{method:adminEp.method,pathTemplate:adminEp.path,path:adminPath,resource:adminEp.resource},
           identityId:base.id,mutation:{type:"role",from:base.role,to:`${adminEp.method} ${adminEp.path}`,reason:`admin-only action invoked by ${base.role}`},expectedDeny:true}));
         if(adm) tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"ADMIN",priority:2,
           hypothesis:{text:`Positive control: ${adm.id} (${adm.role}) invokes ${adminEp.method} ${adminEp.path} — must ALLOW.`,source:"heuristic"},
           given:`authenticated as ${adm.id} (${adm.role})`,whenText:`${adminEp.method} ${adminEp.path}`,expectText:"ALLOW",
-          target:{method:adminEp.method,pathTemplate:adminEp.path,path:adminEp.path,resource:adminEp.resource},
+          target:{method:adminEp.method,pathTemplate:adminEp.path,path:adminPath,resource:adminEp.resource},
           identityId:adm.id,mutation:{type:"none",reason:"positive control"},expectedDeny:false}));
       }
     }
@@ -123,25 +133,26 @@ function planTests(){
       for(const idGet of idGets){
         const foreign=ownEntries.find((o,i,arr)=>arr[0]&&o.ownerId!==arr[0].ownerId)||ownEntries[1]||ownEntries[0];
         const actor=base||(S.model.testIdentities||[])[0];
+        let P; try{ P={ foreign:foreign&&objectPath(idGet.path,foreign.objectId) }; }catch(e){ skip(cat,idGet,e); continue; }
         if(foreign&&actor) tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"DATA",priority:2,
           hypothesis:H("DATA",{obj:foreign.objectId,sensN:sensFields().length,ep:`${idGet.method} ${idGet.path}`}),
-          given:`authenticated as ${actor.id}`,whenText:`${idGet.method} ${fillPath(idGet.path,foreign.objectId)} (foreign)`,expectText:"MUST NOT contain PERSONAL/SENSITIVE",
-          target:{method:idGet.method,pathTemplate:idGet.path,path:fillPath(idGet.path,foreign.objectId),resource:idGet.resource},
-          identityId:actor.id,mutation:{type:"ownership",field:idParam(idGet.path),from:"own",to:foreign.objectId,reason:`check field leak on foreign object (owner ${foreign.ownerId})`},expectedDeny:true,objectId:foreign.objectId,leakCheck:true}));
+          given:`authenticated as ${actor.id}`,whenText:`${idGet.method} ${P.foreign} (foreign)`,expectText:"MUST NOT contain PERSONAL/SENSITIVE",
+          target:{method:idGet.method,pathTemplate:idGet.path,path:P.foreign,resource:idGet.resource},
+          identityId:actor.id,mutation:{type:"ownership",field:lastPathParam(idGet.path),from:"own",to:foreign.objectId,reason:`check field leak on foreign object (owner ${foreign.ownerId})`},expectedDeny:true,objectId:foreign.objectId,leakCheck:true}));
       }
     }
     if(cat==="AUTHN"){
       prot.slice(0,15).forEach(e=>{ tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"AUTHN",priority:2,
         hypothesis:H("AUTHN",{ep:`${e.method} ${e.path}`}),given:"no token",whenText:`${e.method} ${e.path}`,expectText:"DENY 401",
-        target:{method:e.method,pathTemplate:e.path,path:fillPath(e.path,"1"),resource:e.resource},
+        target:{method:e.method,pathTemplate:e.path,path:placeholderPath(e.path,"1"),resource:e.resource},
         identityId:null,mutation:{type:"auth-strip",from:"identity",to:"anonymous",reason:"no credential sent"},expectedDeny:true})); });
-      if(prot.length>15) S.warnings2=`AUTHN expanded to first 15 of ${prot.length} protected endpoints.`;
+      if(prot.length>15) S.planWarnings.push(`AUTHN expanded to first 15 of ${prot.length} protected endpoints.`);
     }
     if(cat==="ROLE"){
-      if(adminEps.length&&base) adminEps.forEach(adminEp=>tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"ADMIN",priority:2,
+      if(adminEps.length&&base) adminEps.forEach(adminEp=>{ let adminPath; try{ adminPath=fillPath(adminEp.path,{}); }catch(e){ skip(cat,adminEp,e); return; } tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"ADMIN",priority:2,
         hypothesis:{text:`Role boundary: ${base.role} vs ${adminRole()||"privileged"} on ${adminEp.method} ${adminEp.path}.`,source:"heuristic"},given:`authenticated as ${base.id}`,whenText:`${adminEp.method} ${adminEp.path}`,expectText:"DENY unless permitted",
-        target:{method:adminEp.method,pathTemplate:adminEp.path,path:adminEp.path,resource:adminEp.resource},
-        identityId:base.id,mutation:{type:"role",from:base.role,to:adminEp.path,reason:"cross-role invocation"},expectedDeny:true})));
+        target:{method:adminEp.method,pathTemplate:adminEp.path,path:adminPath,resource:adminEp.resource},
+        identityId:base.id,mutation:{type:"role",from:base.role,to:adminEp.path,reason:"cross-role invocation"},expectedDeny:true})); });
       else tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"POLICY",priority:3,
         hypothesis:H("POLICY",{}),given:"permission matrix",whenText:"review contested actions",expectText:"ALLOW ⟺ permission",
         target:{method:"—",pathTemplate:"—",path:"—",resource:"—"},identityId:base?base.id:null,mutation:{type:"none",reason:"no executable endpoint — manual policy review"},expectedDeny:false,skip:true}));
@@ -291,7 +302,7 @@ async function runOne(id){
       resp=stepResults.length?stepResults[stepResults.length-1].resp:null;
       an=analyze(t,resp,baseline);
     } else {
-      if((t.kind==="BOLA"||t.kind==="DATA")&&t.baseObjectId){ try{ baseline=await execTest({...t,target:{...t.target,path:fillPath(t.target.pathTemplate,t.baseObjectId)},objectId:t.baseObjectId,identityId:t.identityId}); }catch(e){ baseline=null; } }
+      if((t.kind==="BOLA"||t.kind==="DATA")&&t.baseObjectId){ try{ baseline=await execTest({...t,target:{...t.target,path:objectPath(t.target.pathTemplate,t.baseObjectId)},objectId:t.baseObjectId,identityId:t.identityId}); }catch(e){ baseline=null; } }
       resp=await execTest(t);
       an=analyze(t,resp,baseline);
     }
@@ -318,7 +329,7 @@ async function runAll(){
           resp=stepResults.length?stepResults[stepResults.length-1].resp:null;
           an=analyze(t,resp,baseline);
         } else {
-          if((t.kind==="BOLA"||t.kind==="DATA")&&t.baseObjectId){ try{ baseline=await execTest({...t,target:{...t.target,path:fillPath(t.target.pathTemplate,t.baseObjectId)},objectId:t.baseObjectId,identityId:t.identityId}); }catch(e){} }
+          if((t.kind==="BOLA"||t.kind==="DATA")&&t.baseObjectId){ try{ baseline=await execTest({...t,target:{...t.target,path:objectPath(t.target.pathTemplate,t.baseObjectId)},objectId:t.baseObjectId,identityId:t.identityId}); }catch(e){} }
           resp=await execTest(t);
           an=analyze(t,resp,baseline);
         }
@@ -386,7 +397,7 @@ function renderPlanner(){
   setHtml($("planner"), html`<div class="tiles"><div class="tile"><b>${S.model.laws.length}</b><span class="sub">laws</span></div>
   <div class="tile"><b>${cond}</b><span class="sub">conditions</span></div><div class="tile"><b>${cases}</b><span class="sub">cases</span></div>
   <div class="tile"><b>${(S.model.testIdentities||[]).length}</b><span class="sub">identities</span></div></div>
-  <table><tr><th>Law</th><th>Category</th><th>Cases</th><th>Priority</th></tr>${S.model.laws.map(l=>{ const ts=S.tests.filter(t=>t.lawId===l.id); return html`<tr><td><code>${l.id}</code> ${l.title||""}</td><td>${l.category}</td><td>${ts.length}</td><td>${ts.length?Math.min(...ts.map(t=>t.priority)):"—"}</td></tr>`; })}</table>${S.warnings2?html`<div class="note">${S.warnings2}</div>`:""}`);
+  <table><tr><th>Law</th><th>Category</th><th>Cases</th><th>Priority</th></tr>${S.model.laws.map(l=>{ const ts=S.tests.filter(t=>t.lawId===l.id); return html`<tr><td><code>${l.id}</code> ${l.title||""}</td><td>${l.category}</td><td>${ts.length}</td><td>${ts.length?Math.min(...ts.map(t=>t.priority)):"—"}</td></tr>`; })}</table>${(S.planWarnings||[]).length?html`<div class="note">${joinHtml(S.planWarnings, html`<br>`)}</div>`:""}`);
 }
 function targetReason(e){
   const r=[]; if(/\{.+\}/.test(e.path)) r.push("object-ID"); if(/^\/admin/i.test(e.path)||e.action==="AdminAction") r.push("admin"); if(e.method!=="GET") r.push("write"); if(e.auth) r.push("auth-required");
@@ -439,9 +450,9 @@ function renderMatrix(){
   const ids=S.model.testIdentities||[]; const own=S.model.ownership||[];
   setHtml($("matrix"), html`${eps.map(idGet=>{
     const rows=ids.map(i=>{ const mine=own.find(o=>o.ownerId===i.id); const foreign=own.find(o=>o.ownerId!==i.id);
-      const cell=(obj,exp)=>{ if(!obj) return "—"; const p=fillPath(idGet.path,obj.objectId); const hit=Object.keys(S.results).find(rid=>{ const r=S.results[rid]; return r.test.identityId===i.id&&r.test.target.path===p&&r.test.target.method===idGet.method; });
+      const cell=(obj,exp)=>{ if(!obj) return "—"; let p; try{ p=objectPath(idGet.path,obj.objectId); }catch(e){ return "not planned — missing path parameter values"; } const hit=Object.keys(S.results).find(rid=>{ const r=S.results[rid]; return r.test.identityId===i.id&&r.test.target.path===p&&r.test.target.method===idGet.method; });
         if(!hit) return `${exp} (pending)`; const st=S.results[hit].status; return st==="PASS"?`✓ ${exp}`:`${st} (exp ${exp})`; };
-      return html`<tr><td><code>${i.id}</code> (${i.role})</td><td><code>${mine?fillPath(idGet.path,mine.objectId):"—"}</code><br>${cell(mine,"ALLOW")}</td><td><code>${foreign?fillPath(idGet.path,foreign.objectId):"—"}</code><br>${cell(foreign,"DENY")}</td></tr>`; });
+      return html`<tr><td><code>${i.id}</code> (${i.role})</td><td><code>${mine?displayObjectPath(idGet.path,mine.objectId):"—"}</code><br>${cell(mine,"ALLOW")}</td><td><code>${foreign?displayObjectPath(idGet.path,foreign.objectId):"—"}</code><br>${cell(foreign,"DENY")}</td></tr>`; });
     return html`<h3><code>${idGet.method+" "+idGet.path}</code></h3><table><tr><th>Identity</th><th>Own (expect ALLOW)</th><th>Foreign (expect DENY)</th></tr>${rows}</table>`;
   })}`);
 }
@@ -551,7 +562,7 @@ window.addEventListener("DOMContentLoaded",()=>{
     S.auth.scheme=$("authScheme").value; S.auth.apiKeyName=$("apiKeyName").value.trim()||"X-API-Key"; S.auth.cookieName=$("cookieName").value.trim()||"session";
     planTests(); S.sel=S.tests[0]?S.tests[0].id:null;
     $("console").textContent=`planned ${S.tests.length} cases from ${S.model.laws.length} laws (${S.execMode}${S.execMode==="mock"?"-"+S.mockMode:""}).`;
-    log(`planner: ${S.model.laws.length} laws → ${S.tests.length} cases (heuristic; all eligible endpoints)${S.warnings2?" — "+S.warnings2:""}`);
+    log(`planner: ${S.model.laws.length} laws → ${S.tests.length} cases (heuristic; all eligible endpoints)${(S.planWarnings||[]).length?" — "+S.planWarnings.join("; "):""}`);
     renderAll(); renderAuth();
   };
   $("execMode").onchange=e=>{ S.execMode=e.target.value; renderAll(); renderApproval(); };

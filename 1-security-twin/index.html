@@ -8,7 +8,7 @@
 <style>.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:10px}.tile{background:#020617;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}.tile b{font-size:20px;display:block}.bar{height:8px;background:#1f2937;border-radius:6px;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;background:linear-gradient(90deg,#06b6d4,#22c55e)}select{background:#020617;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px}</style>
 </head>
 <body>
-<div class="sandbox-banner">🟢 AUTHORIZED SANDBOX ONLY — sandbox-api testing permitted · production testing is prohibited</div>
+<div class="sandbox-banner">🛡 POLICY: use only sandbox targets you are authorized to test · production testing is prohibited</div>
 <div class="wrap">
 <header><h1>SENTINEL X LAB — Part 1</h1>
 <p>OpenAPI / Sandbox → Discovery → Enhanced Model → Twin → Constitution → Testable Laws</p>
@@ -27,7 +27,7 @@
 <label>Configuration — ownership (JSON: objectId → ownerId)</label><textarea id="ownershipEditor" style="min-height:60px" placeholder='{"obj_1":"owner_id_1"} — or Load Demo'></textarea>
 <label>Configured identities</label>
 <div class="row" id="identityChips"><span class="sub">Load Demo or paste config.</span></div>
-<div class="row"><span class="ok">🟢 Authorized Sandbox</span></div>
+<div class="row" id="targetAuthState" data-state="UNKNOWN"><span class="sub">Authorization status unknown.</span></div>
 <button class="primary" id="buildBtn">[ BUILD SECURITY TWIN ]</button>
 </div>
 

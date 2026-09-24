@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyzeSpecText, fillPathTemplate } from "../../src/model";
+import { analyzeSpecText } from "../../src/model";
 import { fixture, readRepoFile } from "../helpers";
 
 describe("analyzeSpecText + legacy view used by the browser apps", () => {
@@ -35,17 +35,5 @@ describe("analyzeSpecText + legacy view used by the browser apps", () => {
     if (!r.ok) throw new Error(r.errors.join());
     expect(r.view.resources.Order!.fields.status).toMatchObject({ sensitivity: "INTERNAL", reason: "manual override by analyst" });
     expect(r.view.resources.Order!.ownershipField).toBe("customerId");
-  });
-});
-
-describe("fillPathTemplate", () => {
-  it("fills every path parameter, by name or by position", () => {
-    const t = "/tenants/{tenantId}/projects/{projectId}";
-    expect(fillPathTemplate(t, { tenantId: "t1", projectId: "p9" })).toBe("/tenants/t1/projects/p9");
-    expect(fillPathTemplate(t, ["t1", "p9"])).toBe("/tenants/t1/projects/p9");
-  });
-
-  it("leaves unknown parameters in place and encodes values", () => {
-    expect(fillPathTemplate("/a/{x}/b/{y}", { x: "1/2" })).toBe("/a/1%2F2/b/{y}");
   });
 });

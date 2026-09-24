@@ -18,12 +18,3 @@ export function analyzeSpecText(text: string, overrides: Record<string, Sensitiv
   const model = buildApiModel(parsed.spec);
   return { ok: true, model, view: toLegacyView(model, overrides) };
 }
-
-/** Fill every {param} in a path template. Values are looked up by name, then used positionally. */
-export function fillPathTemplate(path: string, values: Record<string, string> | readonly string[]): string {
-  let i = 0;
-  return path.replace(/\{([^}]+)\}/g, (whole, name: string) => {
-    const v = Array.isArray(values) ? values[i++] : (values as Record<string, string>)[name];
-    return v === undefined ? whole : encodeURIComponent(v);
-  });
-}
