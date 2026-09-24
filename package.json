@@ -5,7 +5,7 @@
   "description": "Sentinel X: OpenAPI security modelling (Security Twin builder + test lab prototypes)",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:ci": "vitest run --reporter=default --reporter=github-actions --reporter=junit --outputFile.junit=reports/junit.xml",
     "test:watch": "vitest",
     "sample:regen": "node scripts/regen-sample.mjs",
     "check": "npm run typecheck && npm run lint && npm run test && npm run build"

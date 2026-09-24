@@ -1,5 +1,28 @@
 # Progress
 
+## 2026-09-24: CI foundation ✅ (workflow not yet run on GitHub)
+
+Scope: CI and dev tooling only. No application behaviour changed.
+
+| Item | Detail |
+|---|---|
+| `.github/workflows/ci.yml` | On `push` and `pull_request`: checkout → setup Node (from `.nvmrc`, npm cache) → `npm ci` → typecheck → lint → `npm run test:ci` → build. Checks run whenever install succeeded, so every stage reports; any failure fails the job. JUnit report uploaded as `test-report`; stage table written to the run summary. `permissions: contents: read`, `persist-credentials: false`, concurrency cancels superseded runs, 15-minute timeout. |
+| Action pinning | `actions/checkout`, `actions/setup-node` and `actions/upload-artifact` are pinned to the commit SHAs of their `v7` tags (resolved with `git ls-remote` on 2026-09-24). |
+| Node version | `.nvmrc` = `22`; `engines.node` = `>=22.12.0`. That's the lowest version all dependencies support (Vite needs `^20.19 \|\| >=22.12`), and Node 20 is past end-of-life. |
+| Scripts | `check` = `typecheck && lint && test && build` (unchanged). New `test:ci` = the same `vitest run`, plus GitHub annotations and a JUnit file in `reports/` (gitignored). |
+| `.gitattributes` | `* text=auto eol=lf`, CRLF only for `.bat`/`.cmd`/`.ps1`, explicit `binary` for images, fonts, archives and PDFs. `git add --renormalize .` changed no existing files (all 81 were already LF in the index). |
+| `tests/ci/workflow.test.ts` | 9 tests that keep the workflow honest: triggers, read-only permissions, `npm ci` only, stage order and gating, SHA pinning, no secrets, Node version consistency, report + summary, and `check` composition. |
+
+### Verified locally
+
+- `npm ci` (clean install from the lockfile; 0 vulnerabilities) then `npm run check`: typecheck ✅ lint ✅ **218/218** tests ✅ build ✅
+- `npm run test:ci`: 218/218, `reports/junit.xml` written and ignored by git.
+- A throwaway failing test under `GITHUB_ACTIONS=true` produced a `::error file=…,line=…` annotation and exit code 1. The file was deleted afterwards.
+
+### Not verified
+
+- **No GitHub Actions run exists yet.** Nothing has been pushed. The workflow was checked by parsing it and by the invariant tests above, not by GitHub. `actionlint` was not run: installing it means downloading a binary, which I avoided.
+
 ## 2026-09-24: Sandbox policy messaging aligned ✅
 
 - Step 2's banner no longer says "🟢 AUTHORIZED SANDBOX ONLY". It now reads `🛡 POLICY: test only sandbox targets you are authorized to test · production testing is prohibited`, matching Step 1. Both apps state the policy and neither claims that authorization has been verified. No authorization-confirmed state was added.
@@ -132,7 +155,7 @@ Scope: parser hardening, XSS safety, test infrastructure, typed contracts, docs.
 4. External `$ref` (remote/file) is not supported: it produces a warning.
 5. ~~Step 1 still shows a static "🟢 Authorized Sandbox" label regardless of state.~~ Fixed in "Small foundation blockers"; Step 2's banner aligned in "Sandbox policy messaging aligned". (Step 2's live-run approval checkbox is separate and unchanged.)
 5a. No end-to-end browser automation (Playwright) yet; graph pointer interactions were verified manually.
-6. No backend, persistence, CI pipeline or Docker files yet.
+6. No backend, persistence or Docker files yet. (CI workflow added in "CI foundation"; not yet run on GitHub.)
 7. Planning docs from the audit (`docs/TARGET_ARCHITECTURE.md`, `docs/FULL_IMPLEMENTATION_PLAN.md`) were not produced.
 
 ## Next suggested phase

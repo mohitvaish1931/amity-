@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "updated": "2026-09-24",
-  "phase": "sandbox-policy-messaging",
+  "phase": "ci-foundation",
   "commands": {
     "install": {
-      "cmd": "npm install",
+      "cmd": "npm ci",
       "result": "pass",
-      "notes": "0 vulnerabilities (npm audit)"
+      "notes": "clean install from package-lock.json; 0 vulnerabilities"
     },
     "typecheck": {
       "cmd": "npm run typecheck",
@@ -19,8 +19,8 @@
     "test": {
       "cmd": "npm test",
       "result": "pass",
-      "total": 209,
-      "passed": 209,
+      "total": 218,
+      "passed": 218,
       "failed": 0
     },
     "build": {
@@ -36,6 +36,24 @@
       "cmd": "node scripts/serve.mjs (after npm run build)",
       "result": "pass",
       "notes": "Step 1: banner is a policy statement; target label CONFIGURED \"Sandbox target configured / Authorization status unknown\" (also on dashboard); graph 27 nodes / 49 edges; law test paths filled; no console errors. Step 2: demo plan unchanged (22 cases); added two-parameter endpoint -> BOLA/DATA skipped with reason, no planned path contains \"{\", matrix explains; no console errors."
+    },
+    "testCi": {
+      "cmd": "npm run test:ci",
+      "result": "pass",
+      "total": 218,
+      "passed": 218,
+      "failed": 0,
+      "notes": "writes reports/junit.xml; GitHub annotations verified with a throwaway failing test (::error with file/line, exit 1)"
+    },
+    "check": {
+      "cmd": "npm run check",
+      "result": "pass",
+      "notes": "typecheck -> lint -> test -> build"
+    },
+    "githubActions": {
+      "workflow": ".github/workflows/ci.yml",
+      "result": "not-run",
+      "notes": "no push yet, so no GitHub run exists; validated by YAML parsing + tests/ci/workflow.test.ts"
     }
   },
   "fixtures": {
@@ -352,6 +370,24 @@
       "tests": 9,
       "status": "pass",
       "negativeControl": "6 of 7 original tests fail against a51948a (demo-preservation test passes on both by design); the 2 policy-messaging tests fail against the previous Step 2 banner"
+    },
+    {
+      "file": "tests/ci/workflow.test.ts",
+      "area": "CI configuration invariants",
+      "tests": 9,
+      "status": "pass",
+      "covers": [
+        "push + pull_request triggers",
+        "read-only permissions + timeout",
+        "npm ci only (no npm install)",
+        "typecheck -> lint -> test -> build order and install gating",
+        "actions pinned to full commit SHAs",
+        "no secrets / persist-credentials false",
+        "Node version .nvmrc == engines major",
+        "JUnit report upload + always-on summary",
+        "npm run check composition",
+        ".gitattributes LF normalization"
+      ]
     }
   ],
   "auditIssues": [

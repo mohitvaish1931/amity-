@@ -1,0 +1,99 @@
+// Guards the CI configuration itself: it must run the same pipeline as `npm run check`,
+// reproducibly, with pinned actions and without secrets.
+import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
+import { readRepoFile } from "../helpers";
+
+interface Step {
+  name?: string;
+  id?: string;
+  if?: string;
+  uses?: string;
+  run?: string;
+  with?: Record<string, unknown>;
+  env?: Record<string, string>;
+}
+
+const raw = readRepoFile(".github/workflows/ci.yml");
+const wf = parse(raw) as {
+  on: Record<string, unknown>;
+  permissions: Record<string, string>;
+  jobs: Record<string, { "runs-on": string; "timeout-minutes": number; steps: Step[] }>;
+};
+const steps = Object.values(wf.jobs)[0]!.steps;
+const pkg = JSON.parse(readRepoFile("package.json")) as { engines: { node: string }; scripts: Record<string, string> };
+
+describe("GitHub Actions workflow", () => {
+  it("runs on push and pull_request with read-only permissions", () => {
+    expect(Object.keys(wf.on).sort()).toEqual(["pull_request", "push"]);
+    expect(wf.permissions).toEqual({ contents: "read" });
+    expect(Object.values(wf.jobs)[0]!["timeout-minutes"]).toBeGreaterThan(0);
+  });
+
+  it("installs with npm ci and never npm install", () => {
+    const runs = steps.map((s) => s.run ?? "").join("\n");
+    expect(runs).toMatch(/^npm ci$/m);
+    expect(runs).not.toMatch(/npm (install|i)\b/);
+  });
+
+  it("runs typecheck → lint → test → build in order, each gated only on a successful install", () => {
+    const order = ["install", "typecheck", "lint", "test", "build"];
+    expect(steps.filter((s) => s.id && order.includes(s.id)).map((s) => s.id)).toEqual(order);
+    const byId = Object.fromEntries(steps.filter((s) => s.id).map((s) => [s.id!, s]));
+    expect(byId.typecheck!.run).toBe("npm run typecheck");
+    expect(byId.lint!.run).toBe("npm run lint");
+    expect(byId.test!.run).toBe("npm run test:ci");
+    expect(byId.build!.run).toBe("npm run build");
+    for (const id of ["typecheck", "lint", "test", "build"]) {
+      expect(byId[id]!.if).toBe("${{ !cancelled() && steps.install.outcome == 'success' }}");
+    }
+  });
+
+  it("pins every action to a full commit SHA", () => {
+    const uses = steps.filter((s) => s.uses).map((s) => s.uses!);
+    expect(uses.length).toBeGreaterThan(0);
+    for (const u of uses) expect(u).toMatch(/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
+    expect(raw).toMatch(/actions\/checkout@[0-9a-f]{40} # v\d+/);
+  });
+
+  it("does not use or embed secrets", () => {
+    expect(raw).not.toMatch(/secrets\./);
+    expect(raw).not.toMatch(/(api[_-]?key|token|password|passwd|bearer)\s*[:=]/i);
+    const checkout = steps.find((s) => s.uses?.startsWith("actions/checkout@"))!;
+    expect(checkout.with).toMatchObject({ "persist-credentials": false });
+  });
+
+  it("takes the Node version from .nvmrc, consistent with package.json engines", () => {
+    const setup = steps.find((s) => s.uses?.startsWith("actions/setup-node@"))!;
+    expect(setup.with).toMatchObject({ "node-version-file": ".nvmrc", cache: "npm" });
+    const nvmrc = readRepoFile(".nvmrc").trim();
+    const engineMajor = /(\d+)\./.exec(pkg.engines.node)![1];
+    expect(nvmrc).toBe(engineMajor);
+  });
+
+  it("keeps the test report and writes a result summary even on failure", () => {
+    const upload = steps.find((s) => s.uses?.startsWith("actions/upload-artifact@"))!;
+    expect(upload.with).toMatchObject({ path: "reports/" });
+    expect(pkg.scripts["test:ci"]).toContain("--outputFile.junit=reports/junit.xml");
+    expect(readRepoFile(".gitignore")).toMatch(/^reports\/$/m);
+    const summary = steps.find((s) => s.name === "Summary")!;
+    expect(summary.if).toBe("${{ always() }}");
+    expect(summary.run).toContain("GITHUB_STEP_SUMMARY");
+  });
+});
+
+describe("package scripts", () => {
+  it("npm run check chains the same four stages as CI, without duplicating their commands", () => {
+    expect(pkg.scripts.check).toBe("npm run typecheck && npm run lint && npm run test && npm run build");
+    expect(pkg.scripts["test:ci"]).toMatch(/^vitest run /);
+    expect(pkg.scripts.test).toBe("vitest run");
+  });
+});
+
+describe(".gitattributes", () => {
+  it("normalizes text to LF and leaves binaries alone", () => {
+    const attrs = readRepoFile(".gitattributes");
+    expect(attrs).toMatch(/^\* text=auto eol=lf$/m);
+    expect(attrs).toMatch(/^\*\.png binary$/m);
+  });
+});

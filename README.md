@@ -9,7 +9,8 @@ OpenAPI security modelling for **authorized sandbox APIs only**. Step 1 turns an
 ```
 amity/
 ├── README.md
-├── package.json, tsconfig.json, eslint.config.js, vitest.config.ts
+├── package.json, tsconfig.json, eslint.config.js, vitest.config.ts, .nvmrc, .gitattributes
+├── .github/workflows/ci.yml    CI: the same pipeline as `npm run check`
 │
 ├── src/                        typed, tested core (shared by both apps)
 │   ├── contracts/              shared types: ApiModel, Endpoint, Resource, SecurityLaw, Finding, Evidence…
@@ -35,7 +36,7 @@ amity/
 
 ## Install
 
-Requires Node.js 20 or newer.
+Requires Node.js 22.12 or newer (see `.nvmrc`).
 
 ```bash
 npm install
@@ -63,6 +64,22 @@ npm run lint        # ESLint (bans innerHTML in the apps)
 npm run build       # production bundles in dist/
 npm run check       # all four, in order
 ```
+
+### Continuous integration
+
+`npm run check` is the verification pipeline: **typecheck → lint → test → build**, stopping at the first failure. Run it before every commit.
+
+The same pipeline runs in GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) on every push and pull request:
+
+- Node.js comes from [`.nvmrc`](.nvmrc) (22 LTS; `package.json` requires `>=22.12.0`).
+- Dependencies are installed with `npm ci`, exactly as locked in `package-lock.json`.
+- Typecheck, lint, test (`npm run test:ci`) and build run as separate steps. Each one runs once install succeeds, so one failure never hides another, and any failure fails the workflow.
+- Failing tests show up as file/line annotations. A JUnit report (`reports/junit.xml`) is uploaded as the `test-report` artifact, and the run summary lists each stage's result.
+- No secrets or credentials are used. Actions are pinned to commit SHAs, and the job has read-only repository permissions.
+
+`tests/ci/workflow.test.ts` checks these rules, so a workflow edit that breaks them fails `npm test`.
+
+Line endings are normalized to LF by [`.gitattributes`](.gitattributes).
 
 After changing step 1's model logic, regenerate the step 2 demo model (a test fails if it drifts):
 
