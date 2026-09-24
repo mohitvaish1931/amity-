@@ -1,4 +1,5 @@
-# Sentinel X verification: the same pipeline as `npm run check` (typecheck → lint → test → build).
+# Sentinel X verification: the same pipeline as `npm run check` (typecheck → lint → test → build),
+# followed by Playwright E2E on the production build.
 # No secrets or external credentials are used or needed.
 name: CI
 
@@ -15,9 +16,9 @@ concurrency:
 
 jobs:
   verify:
-    name: Verify (typecheck, lint, test, build)
+    name: Verify (typecheck, lint, test, build, e2e)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -63,12 +64,37 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run build
 
+      # Browser E2E on the production build from the step above (no second build).
+      - name: Install Playwright Chromium
+        id: pwinstall
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E (Playwright)
+        id: e2e
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.pwinstall.outcome == 'success' }}
+        env:
+          E2E_SKIP_BUILD: "1"
+          PW_CHANNELS: chromium
+        run: npm run test:e2e
+
       - name: Upload test report
-        if: ${{ !cancelled() && steps.test.outcome != 'skipped' }}
+        if: ${{ !cancelled() && (steps.test.outcome != 'skipped' || steps.e2e.outcome != 'skipped') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: test-report
           path: reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() && steps.e2e.outcome == 'failure' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
           if-no-files-found: ignore
           retention-days: 14
 
@@ -80,6 +106,7 @@ jobs:
           LINT: ${{ steps.lint.outcome }}
           TEST: ${{ steps.test.outcome }}
           BUILD: ${{ steps.build.outcome }}
+          E2E: ${{ steps.e2e.outcome }}
         run: |
           icon() { case "$1" in success) echo "✅ passed";; failure) echo "❌ failed";; skipped) echo "⏭ skipped";; *) echo "⚪ ${1:-not run}";; esac; }
           {
@@ -92,4 +119,5 @@ jobs:
             echo "| Lint | $(icon "$LINT") |"
             echo "| Test | $(icon "$TEST") |"
             echo "| Build | $(icon "$BUILD") |"
+            echo "| E2E (Playwright, Chromium) | $(icon "$E2E") |"
           } >> "$GITHUB_STEP_SUMMARY"

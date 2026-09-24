@@ -49,6 +49,32 @@ describe("GitHub Actions workflow", () => {
     }
   });
 
+  it("runs Playwright E2E on the CI production build, after installing Chromium with its system dependencies", () => {
+    const order = ["build", "pwinstall", "e2e"];
+    expect(steps.filter((s) => s.id && order.includes(s.id)).map((s) => s.id)).toEqual(order);
+    const byId = Object.fromEntries(steps.filter((s) => s.id).map((s) => [s.id!, s]));
+    expect(byId.pwinstall!.run).toBe("npx playwright install --with-deps chromium");
+    expect(byId.pwinstall!.if).toBe("${{ !cancelled() && steps.build.outcome == 'success' }}");
+    expect(byId.e2e!.run).toBe("npm run test:e2e");
+    expect(byId.e2e!.if).toBe("${{ !cancelled() && steps.build.outcome == 'success' && steps.pwinstall.outcome == 'success' }}");
+    // Reuse the build from the Build step (no second build) and run on Playwright's own Chromium.
+    expect(byId.e2e!.env).toEqual({ E2E_SKIP_BUILD: "1", PW_CHANNELS: "chromium" });
+    expect(readRepoFile("scripts/e2e-server.mjs")).toMatch(/E2E_SKIP_BUILD === "1"/);
+  });
+
+  it("uploads the Playwright report and traces only when E2E fails", () => {
+    const upload = steps.find((s) => s.name === "Upload Playwright report")!;
+    expect(upload.if).toBe("${{ !cancelled() && steps.e2e.outcome == 'failure' }}");
+    expect(String(upload.with!.path)).toMatch(/playwright-report\/[\s\S]*test-results\//);
+    const config = readRepoFile("playwright.config.ts");
+    expect(config).toMatch(/process\.env\.CI[\s\S]*"html"[\s\S]*"junit"/);
+    expect(config).toMatch(/reuseExistingServer: false/);
+    const ignore = readRepoFile(".gitignore");
+    expect(ignore).toMatch(/^playwright-report\/$/m);
+    expect(ignore).toMatch(/^test-results\/$/m);
+    expect(steps.find((s) => s.name === "Summary")!.env).toMatchObject({ E2E: "${{ steps.e2e.outcome }}" });
+  });
+
   it("pins every action to a full commit SHA", () => {
     const uses = steps.filter((s) => s.uses).map((s) => s.uses!);
     expect(uses.length).toBeGreaterThan(0);

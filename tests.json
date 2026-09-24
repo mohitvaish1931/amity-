@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "updated": "2026-09-24",
-  "phase": "playwright-e2e",
+  "phase": "ci-playwright-e2e",
   "commands": {
     "install": {
       "cmd": "npm ci",
@@ -19,9 +19,10 @@
     "test": {
       "cmd": "npm test",
       "result": "pass",
-      "total": 261,
-      "passed": 261,
-      "failed": 0
+      "total": 263,
+      "passed": 263,
+      "failed": 0,
+      "notes": "passed 3 consecutive runs after the flaky-test fix"
     },
     "build": {
       "cmd": "npm run build",
@@ -40,8 +41,8 @@
     "testCi": {
       "cmd": "npm run test:ci",
       "result": "pass",
-      "total": 261,
-      "passed": 261,
+      "total": 263,
+      "passed": 263,
       "failed": 0,
       "notes": "writes reports/junit.xml; GitHub annotations verified with a throwaway failing test (::error with file/line, exit 1)"
     },
@@ -71,10 +72,31 @@
             "test",
             "build"
           ]
+        },
+        {
+          "id": 36031798073,
+          "commit": "ef0f90b",
+          "result": "success"
+        },
+        {
+          "id": 36036528693,
+          "commit": "a244f83",
+          "result": "failure",
+          "failedStep": "Test",
+          "cause": "flaky jsdom test: fixed 30 ms wait for an asynchronous React render (constitution-panel.test.ts); fixed with waitFor polling"
         }
       ],
-      "nextRun": "not pushed since 99775ec",
-      "fixCommit": "99775ec (esbuild 0.25.12 -> 0.28.2)"
+      "nextRun": "E2E-in-CI not yet run on GitHub (commit not pushed)",
+      "fixCommit": "99775ec (esbuild 0.25.12 -> 0.28.2)",
+      "pipeline": [
+        "npm ci",
+        "typecheck",
+        "lint",
+        "test",
+        "build",
+        "install Playwright Chromium",
+        "e2e (Playwright, chromium, reuses build)"
+      ]
     },
     "e2e": {
       "cmd": "npm run test:e2e",
@@ -95,7 +117,17 @@
         "empty model",
         "non-demo model (marketplace fixture)",
         "invalid model error state"
-      ]
+      ],
+      "ciMode": {
+        "cmd": "CI=1 E2E_SKIP_BUILD=1 npm run test:e2e",
+        "result": "pass",
+        "total": 8,
+        "passed": 8,
+        "outputs": [
+          "reports/e2e-junit.xml",
+          "playwright-report/index.html"
+        ]
+      }
     }
   },
   "fixtures": {
@@ -417,7 +449,7 @@
     {
       "file": "tests/ci/workflow.test.ts",
       "area": "CI configuration invariants",
-      "tests": 9,
+      "tests": 11,
       "status": "pass",
       "covers": [
         "push + pull_request triggers",
@@ -429,7 +461,10 @@
         "Node version .nvmrc == engines major",
         "JUnit report upload + always-on summary",
         "npm run check composition",
-        ".gitattributes LF normalization"
+        ".gitattributes LF normalization",
+        "build -> Chromium install -> E2E order and gating",
+        "E2E env (E2E_SKIP_BUILD, PW_CHANNELS=chromium)",
+        "Playwright report upload only on E2E failure"
       ]
     },
     {

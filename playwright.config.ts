@@ -16,7 +16,10 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  reporter: [["list"]],
+  // CI: also an HTML report (uploaded on failure) and JUnit alongside the unit-test report.
+  reporter: process.env.CI
+    ? [["list"], ["html", { open: "never", outputFolder: "playwright-report" }], ["junit", { outputFile: "reports/e2e-junit.xml" }]]
+    : [["list"]],
   timeout: 60_000,
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
@@ -27,12 +30,12 @@ export default defineConfig({
     use: channel === "chromium" ? { ...devices["Desktop Chrome"] } : { ...devices["Desktop Chrome"], channel },
   })),
   webServer: {
-    // Builds dist/ and serves it; never reuses a server that happens to be running.
+    // Builds dist/ (or reuses it with E2E_SKIP_BUILD=1) and serves it; never reuses a server that happens to be running.
     command: "node scripts/e2e-server.mjs",
     url: `http://127.0.0.1:${PORT}/1-security-twin/`,
     reuseExistingServer: false,
     timeout: 180_000,
-    env: { PORT: String(PORT) },
+    env: { PORT: String(PORT), ...(process.env.E2E_SKIP_BUILD ? { E2E_SKIP_BUILD: process.env.E2E_SKIP_BUILD } : {}) },
     stdout: "ignore",
     stderr: "pipe",
   },

@@ -53,7 +53,9 @@ describe("Constitution panel", () => {
     app = await builtDemo();
     const button = card(app, "LAW-004").querySelector<HTMLButtonElement>("[data-focus-law]")!;
     button.click();
-    await app.settle();
+    // The highlight arrives after an asynchronous React render (focus effect → state update); poll for it
+    // instead of assuming a fixed delay (a fixed 30 ms wait failed on a slower CI runner).
+    await app.waitFor(() => app!.document.querySelector(".twin-node.is-highlight"));
     expect(card(app, "LAW-004").classList.contains("is-focused")).toBe(true);
     expect(card(app, "LAW-001").classList.contains("is-focused")).toBe(false);
     const highlighted = [...app.document.querySelectorAll(".twin-node.is-highlight .twin-label")].map((n) => n.textContent).sort();

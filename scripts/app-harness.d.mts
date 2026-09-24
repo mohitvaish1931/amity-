@@ -14,6 +14,7 @@ export interface LoadedApp {
   click: (id: string) => void;
   setValue: (id: string, value: string) => void;
   settle: () => Promise<void>;
+  waitFor: (predicate: () => unknown, opts?: { timeout?: number; interval?: number }) => Promise<void>;
   close: () => void;
 }
 

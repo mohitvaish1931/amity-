@@ -10,7 +10,7 @@ OpenAPI security modelling for **authorized sandbox APIs only**. Step 1 turns an
 amity/
 ├── README.md
 ├── package.json, tsconfig.json, eslint.config.js, vitest.config.ts, .nvmrc, .gitattributes
-├── .github/workflows/ci.yml    CI: the same pipeline as `npm run check`
+├── .github/workflows/ci.yml    CI: `npm run check` pipeline + Playwright E2E
 │
 ├── src/                        typed, tested core (shared by both apps)
 │   ├── contracts/              shared types: ApiModel, Endpoint, Resource, SecurityLaw, Finding, Evidence…
@@ -84,18 +84,25 @@ Expected node, edge and highlight counts are computed from the model libraries, 
 - Other platforms: uses Playwright's bundled Chromium. Install it once with `npx playwright install chromium`.
 - Override with `PW_CHANNELS`, e.g. `PW_CHANNELS=chromium` or `PW_CHANNELS=chrome`. The port can be changed with `E2E_PORT`.
 
-The E2E suite is not part of `npm run check` or CI yet.
+`E2E_SKIP_BUILD=1` reuses an existing `dist/` instead of building again. CI does this.
+
+The E2E suite is not part of `npm run check` (it needs a browser), but it **runs in GitHub Actions** (see below).
 
 ### Continuous integration
 
 `npm run check` is the verification pipeline: **typecheck → lint → test → build**, stopping at the first failure. Run it before every commit.
 
-The same pipeline runs in GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) on every push and pull request:
+The same pipeline, **plus browser E2E**, runs in GitHub Actions ([.github/workflows/ci.yml](.github/workflows/ci.yml)) on every push and pull request:
+
+```
+npm ci → typecheck → lint → unit tests → production build → install Playwright Chromium → E2E (on that build)
+```
 
 - Node.js comes from [`.nvmrc`](.nvmrc) (22 LTS; `package.json` requires `>=22.12.0`).
 - Dependencies are installed with `npm ci`, exactly as locked in `package-lock.json`.
 - Typecheck, lint, test (`npm run test:ci`) and build run as separate steps. Each one runs once install succeeds, so one failure never hides another, and any failure fails the workflow.
-- Failing tests show up as file/line annotations. A JUnit report (`reports/junit.xml`) is uploaded as the `test-report` artifact, and the run summary lists each stage's result.
+- E2E runs `npm run test:e2e` with `PW_CHANNELS=chromium` and `E2E_SKIP_BUILD=1`. It uses Playwright's own Chromium (`npx playwright install --with-deps chromium`), so no preinstalled Chrome or Edge is needed. It tests the build from the Build step, so nothing is built twice. An E2E failure fails the workflow, and the Playwright HTML report and traces are uploaded as the `playwright-report` artifact.
+- Failing tests show up as file/line annotations. JUnit reports (`reports/junit.xml` for unit tests, `reports/e2e-junit.xml` for E2E) are uploaded as the `test-report` artifact, and the run summary lists each stage's result.
 - No secrets or credentials are used. Actions are pinned to commit SHAs, and the job has read-only repository permissions.
 
 `tests/ci/workflow.test.ts` checks these rules, so a workflow edit that breaks them fails `npm test`.

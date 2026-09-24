@@ -95,6 +95,7 @@ describe("Security Twin graph in Step 1", () => {
     const lawFilter = app.document.querySelector<HTMLSelectElement>('[data-testid="twin-law-filter"]')!;
     expect([...lawFilter.options].map((o) => o.value)).toEqual(["", "LAW-001", "LAW-002", "LAW-003", "LAW-004", "LAW-005", "LAW-006", "LAW-007"]);
     await change(app, lawFilter, "LAW-003"); // the administrative-endpoint law
+    await app.waitFor(() => q(app!, ".twin-node.is-highlight").length > 0);
     const highlighted = q(app, ".twin-node.is-highlight").map((n) => n.querySelector(".twin-label")!.textContent);
     expect(highlighted.sort()).toEqual(["/admin/refund", "Admin", "Administrator", "Customer", "LAW-003", "Refund", "User A", "User B"]);
     expect(q(app, ".twin-node.is-dim").length).toBeGreaterThan(0);

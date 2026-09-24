@@ -97,6 +97,15 @@ export async function loadApp(appDir) {
     },
     /** Let pending promise callbacks (fetch/FileReader chains, React effects) settle. */
     settle: () => new Promise((r) => setTimeout(r, 30)),
+    /** Poll until `predicate()` is truthy. For state that appears after asynchronous React renders. */
+    waitFor: async (predicate, { timeout = 5000, interval = 20 } = {}) => {
+      const deadline = Date.now() + timeout;
+      for (;;) {
+        if (predicate()) return;
+        if (Date.now() > deadline) throw new Error(`waitFor: condition not met within ${timeout}ms`);
+        await new Promise((r) => setTimeout(r, interval));
+      }
+    },
     close: () => w.close(),
   };
 }

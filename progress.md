@@ -1,5 +1,37 @@
 # Progress
 
+## 2026-09-24: CI runs Playwright E2E (committed, not pushed; not yet run on GitHub)
+
+Scope: CI and browser QA only.
+
+| Item | Detail |
+|---|---|
+| Workflow | After **Build**: `Install Playwright Chromium` (`npx playwright install --with-deps chromium`), then `E2E (Playwright)` (`npm run test:e2e` with `PW_CHANNELS=chromium`, `E2E_SKIP_BUILD=1`), then `Upload Playwright report` (HTML report + traces, **only when E2E fails**). The test-report artifact now also carries `reports/e2e-junit.xml`. The summary table has an E2E row. The timeout rose from 15 to 25 minutes. |
+| No duplicate build | `scripts/e2e-server.mjs` honours `E2E_SKIP_BUILD=1`: it reuses the `dist/` from the Build step, or exits 1 with a clear message if there is none (verified). |
+| Browser | Playwright's own Chromium on the runner, so no preinstalled Chrome or Edge is needed. Locally on Windows, still installed Chrome + Edge. |
+| Failure handling | The E2E step failing fails the job. Playwright config in CI adds `html` and `junit` reporters. `reuseExistingServer: false`. The server is a single process that Playwright stops. |
+| Invariant tests | `tests/ci/workflow.test.ts` +2: build → Chromium install → E2E order and gating, E2E env (skip build, chromium), failure-only report upload, CI reporters, gitignored report folders, E2E summary row. |
+
+### Also fixed: flaky jsdom test that made the previous CI run red
+
+- CI run 36036528693 (`a244f83`) failed on `constitution-panel.test.ts` "highlights a law's scope…". The test waited a fixed 30 ms for a highlight that arrives after an asynchronous React render. The GitHub runner was slower.
+- Fix, test code only: the harness gained `waitFor(predicate)` polling. The constitution-panel test and the twin-graph law-filter test now wait for the highlight to render instead of sleeping. No app code changed.
+- Verification: the full unit suite passed 263/263 three runs in a row.
+
+### Local results
+
+- `npm run check`: typecheck ✅ lint ✅ **263/263** ✅ build ✅
+- `npm run test:e2e` (builds itself): **8/8** ✅
+- `CI=1 E2E_SKIP_BUILD=1 npm run test:e2e` (CI mode, reusing `dist/`): **8/8** ✅; wrote `reports/e2e-junit.xml` and `playwright-report/index.html`
+- Port 4178 was free after every run.
+- Workflow YAML parses; its invariants are tested. `actionlint` was not run (it would need a binary download).
+
+### Limitations
+
+- **Not verified on GitHub yet.** The Chromium-channel run (`PW_CHANNELS=chromium`) has not been executed anywhere yet. Locally only Chrome/Edge channels ran, because installing Playwright's Chromium means a browser download.
+- No cache for Playwright browsers in CI, so each run downloads Chromium and its system dependencies. That's simpler, but slower.
+- E2E still covers Step 1 only, on Chromium only.
+
 ## 2026-09-24: Phase: Playwright end-to-end tests ✅
 
 Scope: browser QA of the existing Step 1 frontend. No security testing, scanning or target interaction.
