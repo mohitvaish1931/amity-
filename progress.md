@@ -1,5 +1,11 @@
 # Progress
 
+## 2026-09-24: Sandbox policy messaging aligned ✅
+
+- Step 2's banner no longer says "🟢 AUTHORIZED SANDBOX ONLY". It now reads `🛡 POLICY: test only sandbox targets you are authorized to test · production testing is prohibited`, matching Step 1. Both apps state the policy and neither claims that authorization has been verified. No authorization-confirmed state was added.
+- Regression tests (`tests/apps/foundation-blockers.test.ts`, "Step 2 sandbox policy messaging"): the rendered page, before and after planning, and the page source contain no authorization claim. Both tests fail against the old banner.
+- `npm test` 209/209 ✅ · typecheck ✅ · lint ✅ · build ✅
+
 ## 2026-09-24: Phase: Small foundation blockers ✅
 
 Scope: UI truthfulness and path-template handling. No runtime or network features were added.
@@ -124,7 +130,7 @@ Scope: parser hardening, XSS safety, test infrastructure, typed contracts, docs.
 2. ~~Step 2 `fillPath` still fills only the first path parameter (BUG-09, step 2 part).~~ Fixed in "Small foundation blockers".
 3. Step 2 has not adopted the typed contracts (`TestCase`, `TestResult`, `Finding`, `Evidence`). Only rendering was migrated.
 4. External `$ref` (remote/file) is not supported: it produces a warning.
-5. ~~Step 1 still shows a static "🟢 Authorized Sandbox" label regardless of state.~~ Fixed in "Small foundation blockers". Step 2's banner still uses the older "🟢 AUTHORIZED SANDBOX ONLY" wording (its live-run approval checkbox is separate and unchanged).
+5. ~~Step 1 still shows a static "🟢 Authorized Sandbox" label regardless of state.~~ Fixed in "Small foundation blockers"; Step 2's banner aligned in "Sandbox policy messaging aligned". (Step 2's live-run approval checkbox is separate and unchanged.)
 5a. No end-to-end browser automation (Playwright) yet; graph pointer interactions were verified manually.
 6. No backend, persistence, CI pipeline or Docker files yet.
 7. Planning docs from the audit (`docs/TARGET_ARCHITECTURE.md`, `docs/FULL_IMPLEMENTATION_PLAN.md`) were not produced.

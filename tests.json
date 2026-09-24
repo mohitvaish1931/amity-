@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "updated": "2026-09-24",
-  "phase": "small-foundation-blockers",
+  "phase": "sandbox-policy-messaging",
   "commands": {
     "install": {
       "cmd": "npm install",
@@ -19,8 +19,8 @@
     "test": {
       "cmd": "npm test",
       "result": "pass",
-      "total": 207,
-      "passed": 207,
+      "total": 209,
+      "passed": 209,
       "failed": 0
     },
     "build": {
@@ -348,10 +348,10 @@
     },
     {
       "file": "tests/apps/foundation-blockers.test.ts",
-      "area": "Step 1 target state + Step 2 multi-param planning (real bundles)",
-      "tests": 7,
+      "area": "Step 1 target state + Step 2 policy messaging + Step 2 multi-param planning (real bundles)",
+      "tests": 9,
       "status": "pass",
-      "negativeControl": "6 of 7 fail against commit a51948a (the demo-preservation test passes on both by design)"
+      "negativeControl": "6 of 7 original tests fail against a51948a (demo-preservation test passes on both by design); the 2 policy-messaging tests fail against the previous Step 2 banner"
     }
   ],
   "auditIssues": [

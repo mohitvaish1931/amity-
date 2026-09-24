@@ -53,6 +53,24 @@ describe("Step 1 target authorization state", () => {
   });
 });
 
+describe("Step 2 sandbox policy messaging", () => {
+  const CLAIM = /AUTHORIZED SANDBOX ONLY|Authorized Sandbox|Authorization (is )?confirmed|authorization verified|🟢/i;
+
+  it("states the policy without claiming authorization, before and after planning", async () => {
+    app = await loadApp("2-test-lab");
+    expect(app.document.querySelector(".sandbox-banner")!.textContent).toMatch(/^🛡 POLICY: test only sandbox targets you are authorized to test/);
+    expect(app.document.body.textContent).not.toMatch(CLAIM);
+    app.click("demoModelBtn");
+    await app.settle();
+    app.click("planBtn");
+    expect(app.document.body.textContent).not.toMatch(CLAIM);
+  });
+
+  it("has no static authorization claim left in the page source", () => {
+    expect(readRepoFile("2-test-lab/index.html")).not.toMatch(CLAIM);
+  });
+});
+
 describe("Step 2 multi-parameter paths", () => {
   function modelWith(endpoints: object[]) {
     const m = JSON.parse(readRepoFile("2-test-lab/samples/sample-testable-model.json"));
