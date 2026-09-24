@@ -72,6 +72,8 @@ const RELATION_CLASS: Record<TwinRelationType, string> = {
 type Emphasis = "normal" | "highlight" | "dim";
 type TwinFlowNode = Node<{ node: TwinNode; emphasis: Emphasis }, "twin">;
 type Selection = { kind: "node" | "edge"; id: string } | null;
+/** Request to highlight a law from outside the graph (e.g. the Constitution panel). `seq` re-triggers the same law. */
+export type LawFocus = { lawId: string; seq: number } | null;
 
 function chip(node: TwinNode): string | null {
   const m = node.meta;
@@ -83,7 +85,7 @@ function chip(node: TwinNode): string | null {
     case "field":
       return m.ownershipField ? "ownership field" : null;
     case "law":
-      return m.confidence ? `${m.confidence}${m.score !== undefined ? ` ${m.score}` : ""}` : null;
+      return m.confidence ? `${m.confidence}${m.confidenceScore !== undefined ? ` ${m.confidenceScore}%` : ""}` : null;
     case "role":
       return m.privileged ? "privileged" : null;
     default:
@@ -205,7 +207,7 @@ function DetailsPanel({ graph, selection, onSelect }: { graph: TwinGraph; select
               {d.laws.map((l) => (
                 <li key={l.id}>
                   <button type="button" className="twin-link" onClick={() => onSelect({ kind: "node", id: l.id })}>{l.label}</button>{" "}
-                  <span className="twin-muted">{String(l.meta.title ?? "")}</span>
+                  <span className="twin-muted">{String(l.meta.statement ?? "")}</span>
                 </li>
               ))}
             </ul>
@@ -218,7 +220,7 @@ function DetailsPanel({ graph, selection, onSelect }: { graph: TwinGraph; select
   );
 }
 
-function GraphCanvas({ input }: { input: TwinGraphInput }) {
+function GraphCanvas({ input, focus }: { input: TwinGraphInput; focus: LawFocus }) {
   const [fieldMode, setFieldMode] = useState<FieldMode>("key");
   const [selection, setSelection] = useState<Selection>(null);
   const [lawFilter, setLawFilter] = useState("");
@@ -228,6 +230,15 @@ function GraphCanvas({ input }: { input: TwinGraphInput }) {
   const positions = useMemo(() => layoutTwinGraph(graph), [graph]);
   const highlight = useMemo(() => (lawFilter ? lawHighlight(graph, lawFilter) : null), [graph, lawFilter]);
   const lawIds = useMemo(() => graph.nodes.filter((n) => n.type === "law").map((n) => n.label), [graph]);
+
+  // External focus: highlight the law and zoom to its scope.
+  useEffect(() => {
+    if (!focus) return;
+    setLawFilter(focus.lawId);
+    const scope = lawHighlight(graph, focus.lawId);
+    if (scope.nodes.size) requestAnimationFrame(() => void fitView({ nodes: [...scope.nodes].map((id) => ({ id })), padding: 0.3, duration: 300 }));
+    // Deliberately keyed on the request counter only: a new graph must not re-trigger an old focus.
+  }, [focus?.seq]);
 
   const layoutNodes = useMemo<TwinFlowNode[]>(
     () =>
@@ -381,7 +392,7 @@ class GraphErrorBoundary extends Component<{ children: ReactNode; resetKey: unkn
   }
 }
 
-export function SecurityTwinGraph({ input }: { input: TwinGraphInput | null }) {
+export function SecurityTwinGraph({ input, focus = null }: { input: TwinGraphInput | null; focus?: LawFocus }) {
   const empty = !input || ((input.endpoints?.length ?? 0) === 0 && (input.resources?.length ?? 0) === 0 && (input.identities?.length ?? 0) === 0);
   if (empty) {
     return <div className="twin-empty" data-testid="twin-empty">No model yet. Build the Security Twin to see the graph.</div>;
@@ -389,7 +400,7 @@ export function SecurityTwinGraph({ input }: { input: TwinGraphInput | null }) {
   return (
     <GraphErrorBoundary resetKey={input}>
       <ReactFlowProvider>
-        <GraphCanvas input={input} />
+        <GraphCanvas input={input} focus={focus} />
       </ReactFlowProvider>
     </GraphErrorBoundary>
   );

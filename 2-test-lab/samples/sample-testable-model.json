@@ -517,17 +517,797 @@
       "AllowedActions"
     ]
   },
+  "constitution": {
+    "version": "constitution-v1",
+    "laws": [
+      {
+        "id": "LAW-001",
+        "key": "OBJECT_AUTHORIZATION:Order",
+        "category": "OBJECT_AUTHORIZATION",
+        "severity": "High",
+        "statement": "Customer may access only Order objects they own (ownership field Order.customerId).",
+        "rule": {
+          "type": "owner-only-access",
+          "resource": "Order",
+          "ownershipField": "customerId",
+          "subjectRoles": [
+            "Customer"
+          ],
+          "endpoints": [
+            "EP-002",
+            "EP-004"
+          ],
+          "operations": [
+            "read"
+          ]
+        },
+        "invariant": "∀ caller c ∈ roles{Customer}, Order o via {EP-002, EP-004}: ALLOW(c, o) ⇒ o.customerId = c",
+        "appliesTo": {
+          "endpoints": [
+            "EP-002",
+            "EP-004"
+          ],
+          "resources": [
+            "Order"
+          ],
+          "fields": [
+            "Order.customerId"
+          ],
+          "roles": [
+            "Customer"
+          ],
+          "identities": [
+            "customer_001",
+            "customer_002"
+          ]
+        },
+        "provenance": [
+          {
+            "kind": "ownership",
+            "ref": "ownership:config",
+            "detail": "configured owners: User A (101, 103); User B (102)"
+          },
+          {
+            "kind": "path",
+            "ref": "endpoint:GET /orders/{id}",
+            "detail": "path parameter {id} identifies a Order"
+          },
+          {
+            "kind": "path",
+            "ref": "endpoint:GET /orders/{id}/invoice",
+            "detail": "path parameter {id} identifies a Order"
+          },
+          {
+            "kind": "permission",
+            "ref": "permission:Customer.View Foreign Order=false",
+            "detail": "matched to Order by name (foreign read)"
+          },
+          {
+            "kind": "permission",
+            "ref": "permission:Customer.View Own Order=true",
+            "detail": "matched to Order by name (own read)"
+          },
+          {
+            "kind": "role",
+            "ref": "role:Customer",
+            "detail": "non-privileged role subject to ownership checks"
+          },
+          {
+            "kind": "schema",
+            "ref": "schema:Order.customerId",
+            "detail": "ownership field inferred from the schema"
+          }
+        ],
+        "confidence": "HIGH",
+        "confidenceRationale": {
+          "level": "HIGH",
+          "score": 100,
+          "signals": [
+            {
+              "id": "ownership-field",
+              "description": "ownership field Order.customerId",
+              "present": true
+            },
+            {
+              "id": "addressed-by-id",
+              "description": "2 endpoint(s) address a Order by identifier",
+              "present": true
+            },
+            {
+              "id": "foreign-object",
+              "description": "objects owned by 2 identities are configured",
+              "present": true
+            },
+            {
+              "id": "authenticated",
+              "description": "all addressing endpoints require authentication",
+              "present": true
+            },
+            {
+              "id": "permission",
+              "description": "configured permissions restrict access to own objects",
+              "present": true
+            }
+          ],
+          "rule": "HIGH: ownership field + objects of ≥2 owners + authentication required. MEDIUM: ownership field. LOW: otherwise."
+        },
+        "testStrategy": {
+          "kind": "cross-owner-object-access",
+          "preconditions": [
+            "User A owns 101, 103",
+            "User B owns 102"
+          ],
+          "steps": [
+            "Pick identity A (Customer) and a Order that A owns.",
+            "Pick a Order owned by a different identity B.",
+            "For each of GET /orders/{id}, GET /orders/{id}/invoice: request A's own object as A (positive control).",
+            "Request B's object as A.",
+            "Request A's object without credentials."
+          ],
+          "expected": "Own object allowed; the other identity's object denied (403/404) with no object data; anonymous request denied.",
+          "executable": false
+        }
+      },
+      {
+        "id": "LAW-002",
+        "key": "OBJECT_AUTHORIZATION:User",
+        "category": "OBJECT_AUTHORIZATION",
+        "severity": "High",
+        "statement": "Access to User objects by identifier must be authorized per object; the model does not describe who owns a User.",
+        "rule": {
+          "type": "owner-only-access",
+          "resource": "User",
+          "ownershipField": null,
+          "subjectRoles": [
+            "Customer"
+          ],
+          "endpoints": [
+            "EP-001"
+          ],
+          "operations": [
+            "read"
+          ]
+        },
+        "invariant": "∀ caller c, User o via {EP-001}: ALLOW(c, o) ⇒ authorized(c, o)",
+        "appliesTo": {
+          "endpoints": [
+            "EP-001"
+          ],
+          "resources": [
+            "User"
+          ],
+          "fields": [],
+          "roles": [
+            "Customer"
+          ],
+          "identities": [
+            "customer_001",
+            "customer_002"
+          ]
+        },
+        "provenance": [
+          {
+            "kind": "path",
+            "ref": "endpoint:GET /users/{id}",
+            "detail": "path parameter {id} identifies a User"
+          },
+          {
+            "kind": "role",
+            "ref": "role:Customer",
+            "detail": "non-privileged role subject to ownership checks"
+          }
+        ],
+        "confidence": "LOW",
+        "confidenceRationale": {
+          "level": "LOW",
+          "score": 40,
+          "signals": [
+            {
+              "id": "ownership-field",
+              "description": "no ownership field in the schema",
+              "present": false
+            },
+            {
+              "id": "addressed-by-id",
+              "description": "1 endpoint(s) address a User by identifier",
+              "present": true
+            },
+            {
+              "id": "foreign-object",
+              "description": "ownership map not applicable: no ownership field",
+              "present": false
+            },
+            {
+              "id": "authenticated",
+              "description": "all addressing endpoints require authentication",
+              "present": true
+            },
+            {
+              "id": "permission",
+              "description": "no permission mentions own/foreign access",
+              "present": false
+            }
+          ],
+          "rule": "HIGH: ownership field + objects of ≥2 owners + authentication required. MEDIUM: ownership field. LOW: otherwise."
+        },
+        "testStrategy": {
+          "kind": "cross-owner-object-access",
+          "preconditions": [
+            "The model does not describe how a User is owned; provide the ownership rule and objects of at least two identities."
+          ],
+          "steps": [
+            "Pick identity A (Customer) and a User that A owns.",
+            "Pick a User owned by a different identity B.",
+            "For each of GET /users/{id}: request A's own object as A (positive control).",
+            "Request B's object as A.",
+            "Request A's object without credentials."
+          ],
+          "expected": "Own object allowed; the other identity's object denied (403/404) with no object data; anonymous request denied.",
+          "executable": false
+        }
+      },
+      {
+        "id": "LAW-003",
+        "key": "FUNCTION_AUTHORIZATION:admin:Refund",
+        "category": "FUNCTION_AUTHORIZATION",
+        "severity": "High",
+        "statement": "Only Administrator may invoke POST /admin/refund; Customer must be denied.",
+        "rule": {
+          "type": "role-restricted",
+          "endpoints": [
+            "EP-005"
+          ],
+          "allowedRoles": [
+            "Administrator"
+          ],
+          "deniedRoles": [
+            "Customer"
+          ]
+        },
+        "invariant": "∀ caller c, request to {EP-005}: ALLOW(c) ⇒ role(c) ∈ {Administrator}; role(c) ∈ {Customer} ⇒ DENY(c)",
+        "appliesTo": {
+          "endpoints": [
+            "EP-005"
+          ],
+          "resources": [
+            "Refund"
+          ],
+          "fields": [],
+          "roles": [
+            "Administrator",
+            "Customer"
+          ],
+          "identities": [
+            "admin_001",
+            "customer_001",
+            "customer_002"
+          ]
+        },
+        "provenance": [
+          {
+            "kind": "endpoint",
+            "ref": "endpoint:POST /admin/refund",
+            "detail": "path marks an administrative operation"
+          },
+          {
+            "kind": "permission",
+            "ref": "permission:Administrator.Refund=true",
+            "detail": "matched to Refund by name (any)"
+          },
+          {
+            "kind": "permission",
+            "ref": "permission:Customer.Admin Refund=false",
+            "detail": "matched to Refund by name (admin)"
+          },
+          {
+            "kind": "role",
+            "ref": "role:Administrator",
+            "detail": "privileged: role name \"Administrator\" contains \"admin\" (name heuristic)"
+          },
+          {
+            "kind": "role",
+            "ref": "role:Customer",
+            "detail": "non-privileged role: must be denied"
+          }
+        ],
+        "confidence": "HIGH",
+        "confidenceRationale": {
+          "level": "HIGH",
+          "score": 100,
+          "signals": [
+            {
+              "id": "privileged-role",
+              "description": "privileged role(s): Administrator",
+              "present": true
+            },
+            {
+              "id": "other-roles",
+              "description": "non-privileged role(s): Customer",
+              "present": true
+            },
+            {
+              "id": "explicit-deny",
+              "description": "configured permissions deny a non-privileged role",
+              "present": true
+            },
+            {
+              "id": "explicit-allow",
+              "description": "configured permissions allow the privileged role",
+              "present": true
+            },
+            {
+              "id": "authenticated",
+              "description": "all administrative endpoints require authentication",
+              "present": true
+            }
+          ],
+          "rule": "HIGH: privileged role + other roles + explicit deny permission. MEDIUM: privileged role + other roles. LOW: otherwise."
+        },
+        "testStrategy": {
+          "kind": "role-boundary",
+          "preconditions": [
+            "Identities for denied roles (Customer) and allowed roles (Administrator)"
+          ],
+          "steps": [
+            "As an identity of each denied role, call POST /admin/refund with a schema-valid request.",
+            "Repeat the same request as an identity of an allowed role (positive control).",
+            "Repeat without credentials."
+          ],
+          "expected": "Denied roles receive 403 and no state changes; allowed roles succeed; anonymous requests are rejected.",
+          "executable": false
+        }
+      },
+      {
+        "id": "LAW-004",
+        "key": "DATA_EXPOSURE:Invoice",
+        "category": "DATA_EXPOSURE",
+        "severity": "High",
+        "statement": "Invoice responses must not expose paymentMetadata to callers who do not own the parent Order (ownership field Order.customerId).",
+        "rule": {
+          "type": "no-unauthorized-field-exposure",
+          "resource": "Invoice",
+          "fields": [
+            "paymentMetadata"
+          ],
+          "endpoints": [
+            "EP-004"
+          ],
+          "ownershipField": null,
+          "inheritedFrom": "Order.customerId"
+        },
+        "invariant": "∀ caller c, Invoice o returned by {EP-004}: Order(o).customerId ≠ c ⇒ fields(response) ∩ {paymentMetadata} = ∅",
+        "appliesTo": {
+          "endpoints": [
+            "EP-004"
+          ],
+          "resources": [
+            "Invoice",
+            "Order"
+          ],
+          "fields": [
+            "Invoice.paymentMetadata",
+            "Order.customerId"
+          ],
+          "roles": [
+            "Customer"
+          ],
+          "identities": []
+        },
+        "provenance": [
+          {
+            "kind": "endpoint",
+            "ref": "endpoint:GET /orders/{id}/invoice",
+            "detail": "success response returns Invoice"
+          },
+          {
+            "kind": "relationship",
+            "ref": "relationship:Invoice→Order",
+            "detail": "only reachable through GET /orders/{id}/invoice, which identify a Order"
+          },
+          {
+            "kind": "schema",
+            "ref": "schema:Order.customerId",
+            "detail": "ownership field of the parent Order"
+          },
+          {
+            "kind": "sensitivity",
+            "ref": "sensitivity:Invoice.paymentMetadata=SENSITIVE",
+            "detail": "name heuristic: contains \"payment\" (credential/payment/secret pattern)"
+          }
+        ],
+        "confidence": "MEDIUM",
+        "confidenceRationale": {
+          "level": "MEDIUM",
+          "score": 80,
+          "signals": [
+            {
+              "id": "sensitive-fields",
+              "description": "1 PERSONAL/SENSITIVE field(s) in the returned schema",
+              "present": true
+            },
+            {
+              "id": "secret-level",
+              "description": "includes SENSITIVE (credential/payment/secret) fields",
+              "present": true
+            },
+            {
+              "id": "ownership-defined",
+              "description": "entitlement inherited from parent Order.customerId",
+              "present": true
+            },
+            {
+              "id": "analyst-confirmed",
+              "description": "classification is a name heuristic only",
+              "present": false
+            },
+            {
+              "id": "authenticated",
+              "description": "all returning endpoints require authentication",
+              "present": true
+            }
+          ],
+          "rule": "HIGH: analyst-confirmed sensitivity + ownership field. MEDIUM: ownership field or SENSITIVE-level fields. LOW: PERSONAL-only fields without ownership."
+        },
+        "testStrategy": {
+          "kind": "response-field-exposure",
+          "preconditions": [
+            "Endpoints returning Invoice: GET /orders/{id}/invoice",
+            "An identity not entitled to the Invoice"
+          ],
+          "steps": [
+            "Request a Invoice as a caller who is not entitled to it.",
+            "Check the response for paymentMetadata.",
+            "Compare returned fields with the declared response schema to spot undocumented fields."
+          ],
+          "expected": "Either the request is denied, or the listed fields are absent or masked.",
+          "executable": false
+        }
+      },
+      {
+        "id": "LAW-005",
+        "key": "DATA_EXPOSURE:Order",
+        "category": "DATA_EXPOSURE",
+        "severity": "High",
+        "statement": "Order responses must not expose customerName, phone, address, paymentMetadata to callers who do not own the Order.",
+        "rule": {
+          "type": "no-unauthorized-field-exposure",
+          "resource": "Order",
+          "fields": [
+            "customerName",
+            "phone",
+            "address",
+            "paymentMetadata"
+          ],
+          "endpoints": [
+            "EP-002"
+          ],
+          "ownershipField": "customerId",
+          "inheritedFrom": null
+        },
+        "invariant": "∀ caller c, Order o returned by {EP-002}: o.customerId ≠ c ⇒ fields(response) ∩ {customerName, phone, address, paymentMetadata} = ∅",
+        "appliesTo": {
+          "endpoints": [
+            "EP-002"
+          ],
+          "resources": [
+            "Order"
+          ],
+          "fields": [
+            "Order.address",
+            "Order.customerName",
+            "Order.paymentMetadata",
+            "Order.phone"
+          ],
+          "roles": [
+            "Customer"
+          ],
+          "identities": []
+        },
+        "provenance": [
+          {
+            "kind": "endpoint",
+            "ref": "endpoint:GET /orders/{id}",
+            "detail": "success response returns Order"
+          },
+          {
+            "kind": "schema",
+            "ref": "schema:Order.customerId",
+            "detail": "ownership field defines who may see the object"
+          },
+          {
+            "kind": "sensitivity",
+            "ref": "sensitivity:Order.address=PERSONAL",
+            "detail": "name heuristic: contains \"address\" (personal data pattern)"
+          },
+          {
+            "kind": "sensitivity",
+            "ref": "sensitivity:Order.customerName=PERSONAL",
+            "detail": "name heuristic: person name (\"customer name\")"
+          },
+          {
+            "kind": "sensitivity",
+            "ref": "sensitivity:Order.paymentMetadata=SENSITIVE",
+            "detail": "name heuristic: contains \"payment\" (credential/payment/secret pattern)"
+          },
+          {
+            "kind": "sensitivity",
+            "ref": "sensitivity:Order.phone=PERSONAL",
+            "detail": "name heuristic: contains \"phone\" (personal data pattern)"
+          }
+        ],
+        "confidence": "MEDIUM",
+        "confidenceRationale": {
+          "level": "MEDIUM",
+          "score": 80,
+          "signals": [
+            {
+              "id": "sensitive-fields",
+              "description": "4 PERSONAL/SENSITIVE field(s) in the returned schema",
+              "present": true
+            },
+            {
+              "id": "secret-level",
+              "description": "includes SENSITIVE (credential/payment/secret) fields",
+              "present": true
+            },
+            {
+              "id": "ownership-defined",
+              "description": "ownership field Order.customerId defines entitlement",
+              "present": true
+            },
+            {
+              "id": "analyst-confirmed",
+              "description": "classification is a name heuristic only",
+              "present": false
+            },
+            {
+              "id": "authenticated",
+              "description": "all returning endpoints require authentication",
+              "present": true
+            }
+          ],
+          "rule": "HIGH: analyst-confirmed sensitivity + ownership field. MEDIUM: ownership field or SENSITIVE-level fields. LOW: PERSONAL-only fields without ownership."
+        },
+        "testStrategy": {
+          "kind": "response-field-exposure",
+          "preconditions": [
+            "Endpoints returning Order: GET /orders/{id}",
+            "An identity that does not own the Order (per Order.customerId)"
+          ],
+          "steps": [
+            "Request a Order as a caller who is not entitled to it.",
+            "Check the response for customerName, phone, address, paymentMetadata.",
+            "Compare returned fields with the declared response schema to spot undocumented fields."
+          ],
+          "expected": "Either the request is denied, or the listed fields are absent or masked.",
+          "executable": false
+        }
+      },
+      {
+        "id": "LAW-006",
+        "key": "DATA_EXPOSURE:User",
+        "category": "DATA_EXPOSURE",
+        "severity": "Medium",
+        "statement": "User responses may expose customerName, phone, address only to callers entitled to that User.",
+        "rule": {
+          "type": "no-unauthorized-field-exposure",
+          "resource": "User",
+          "fields": [
+            "customerName",
+            "phone",
+            "address"
+          ],
+          "endpoints": [
+            "EP-001"
+          ],
+          "ownershipField": null,
+          "inheritedFrom": null
+        },
+        "invariant": "∀ caller c, User o returned by {EP-001}: ¬entitled(c, o) ⇒ fields(response) ∩ {customerName, phone, address} = ∅",
+        "appliesTo": {
+          "endpoints": [
+            "EP-001"
+          ],
+          "resources": [
+            "User"
+          ],
+          "fields": [
+            "User.address",
+            "User.customerName",
+            "User.phone"
+          ],
+          "roles": [
+            "Customer"
+          ],
+          "identities": []
+        },
+        "provenance": [
+          {
+            "kind": "endpoint",
+            "ref": "endpoint:GET /users/{id}",
+            "detail": "success response returns User"
+          },
+          {
+            "kind": "sensitivity",
+            "ref": "sensitivity:User.address=PERSONAL",
+            "detail": "name heuristic: contains \"address\" (personal data pattern)"
+          },
+          {
+            "kind": "sensitivity",
+            "ref": "sensitivity:User.customerName=PERSONAL",
+            "detail": "name heuristic: person name (\"customer name\")"
+          },
+          {
+            "kind": "sensitivity",
+            "ref": "sensitivity:User.phone=PERSONAL",
+            "detail": "name heuristic: contains \"phone\" (personal data pattern)"
+          }
+        ],
+        "confidence": "LOW",
+        "confidenceRationale": {
+          "level": "LOW",
+          "score": 40,
+          "signals": [
+            {
+              "id": "sensitive-fields",
+              "description": "3 PERSONAL/SENSITIVE field(s) in the returned schema",
+              "present": true
+            },
+            {
+              "id": "secret-level",
+              "description": "only PERSONAL fields",
+              "present": false
+            },
+            {
+              "id": "ownership-defined",
+              "description": "no ownership field: entitlement is undefined",
+              "present": false
+            },
+            {
+              "id": "analyst-confirmed",
+              "description": "classification is a name heuristic only",
+              "present": false
+            },
+            {
+              "id": "authenticated",
+              "description": "all returning endpoints require authentication",
+              "present": true
+            }
+          ],
+          "rule": "HIGH: analyst-confirmed sensitivity + ownership field. MEDIUM: ownership field or SENSITIVE-level fields. LOW: PERSONAL-only fields without ownership."
+        },
+        "testStrategy": {
+          "kind": "response-field-exposure",
+          "preconditions": [
+            "Endpoints returning User: GET /users/{id}",
+            "An identity not entitled to the User"
+          ],
+          "steps": [
+            "Request a User as a caller who is not entitled to it.",
+            "Check the response for customerName, phone, address.",
+            "Compare returned fields with the declared response schema to spot undocumented fields."
+          ],
+          "expected": "Either the request is denied, or the listed fields are absent or masked.",
+          "executable": false
+        }
+      },
+      {
+        "id": "LAW-007",
+        "key": "AUTHENTICATION:bearerAuth",
+        "category": "AUTHENTICATION",
+        "severity": "High",
+        "statement": "Endpoints secured by bearerAuth must reject requests without valid credentials.",
+        "rule": {
+          "type": "requires-authentication",
+          "endpoints": [
+            "EP-001",
+            "EP-002",
+            "EP-003",
+            "EP-004",
+            "EP-005"
+          ],
+          "schemes": [
+            "bearerAuth"
+          ]
+        },
+        "invariant": "∀ request r to {EP-001, EP-002, EP-003, EP-004, EP-005}: ¬authenticated(r, bearerAuth) ⇒ DENY(r)",
+        "appliesTo": {
+          "endpoints": [
+            "EP-001",
+            "EP-002",
+            "EP-003",
+            "EP-004",
+            "EP-005"
+          ],
+          "resources": [],
+          "fields": [],
+          "roles": [],
+          "identities": []
+        },
+        "provenance": [
+          {
+            "kind": "endpoint",
+            "ref": "endpoint:GET /orders/{id}",
+            "detail": "operation security: bearerAuth"
+          },
+          {
+            "kind": "endpoint",
+            "ref": "endpoint:GET /orders/{id}/invoice",
+            "detail": "operation security: bearerAuth"
+          },
+          {
+            "kind": "endpoint",
+            "ref": "endpoint:GET /users/{id}",
+            "detail": "operation security: bearerAuth"
+          },
+          {
+            "kind": "endpoint",
+            "ref": "endpoint:POST /admin/refund",
+            "detail": "operation security: bearerAuth"
+          },
+          {
+            "kind": "endpoint",
+            "ref": "endpoint:POST /orders",
+            "detail": "operation security: bearerAuth"
+          },
+          {
+            "kind": "security",
+            "ref": "security:bearerAuth",
+            "detail": "declared scheme (http bearer)"
+          }
+        ],
+        "confidence": "HIGH",
+        "confidenceRationale": {
+          "level": "HIGH",
+          "score": 100,
+          "signals": [
+            {
+              "id": "explicit",
+              "description": "security requirement declared (5 at operation level, 0 inherited from root)",
+              "present": true
+            },
+            {
+              "id": "declared-schemes",
+              "description": "every referenced scheme is declared",
+              "present": true
+            },
+            {
+              "id": "typed-schemes",
+              "description": "every scheme has a known type",
+              "present": true
+            }
+          ],
+          "rule": "HIGH: declared requirement with declared, typed schemes. MEDIUM: declared requirement but a scheme is undeclared or untyped."
+        },
+        "testStrategy": {
+          "kind": "anonymous-access-denied",
+          "preconditions": [
+            "5 endpoint(s): GET /users/{id}, GET /orders/{id}, POST /orders, GET /orders/{id}/invoice +1 more",
+            "Request values built from each operation's parameter and body schemas"
+          ],
+          "steps": [
+            "For each endpoint, build a schema-valid request.",
+            "Send it without any credentials.",
+            "Send it with an invalid or expired credential for bearerAuth."
+          ],
+          "expected": "Every request is rejected (401/403) and the response contains no resource data.",
+          "executable": false
+        }
+      }
+    ],
+    "notes": []
+  },
   "laws": [
     {
       "id": "LAW-001",
       "category": "BOLA",
       "severity": "High",
-      "title": "Customer can access only owned Order objects.",
-      "source": "Ownership field 'customerId' on Order + EP-001, EP-002, EP-004 + map 101→User A; 102→User B; 103→User A",
+      "title": "Customer may access only Order objects they own (ownership field Order.customerId). (+1 related law: LAW-002)",
+      "source": "ownership:config; endpoint:GET /orders/{id}; endpoint:GET /orders/{id}/invoice; permission:Customer.View Foreign Order=false; permission:Customer.View Own Order=true; role:Customer; schema:Order.customerId; endpoint:GET /users/{id}",
       "confidence": "HIGH",
       "score": 90,
-      "reason": "Ownership field 'customerId' + configured map isolates Order.",
-      "invariant": "∀ Customer c, order o: ALLOW(GET /users/{id}) ⟺ owner(o)==c",
+      "reason": "HIGH: ownership field + objects of ≥2 owners + authentication required. MEDIUM: ownership field. LOW: otherwise.",
+      "invariant": "∀ caller c ∈ roles{Customer}, Order o via {EP-002, EP-004}: ALLOW(c, o) ⇒ o.customerId = c",
       "appliesTo": {
         "endpoints": [
           "EP-001",
@@ -535,15 +1315,24 @@
           "EP-004"
         ],
         "resources": [
-          "Order"
+          "Order",
+          "User"
         ],
         "fields": [
           "Order.customerId"
         ],
         "roles": [
           "Customer"
+        ],
+        "identities": [
+          "customer_001",
+          "customer_002"
         ]
       },
+      "constitutionLawIds": [
+        "LAW-001",
+        "LAW-002"
+      ],
       "tests": [
         {
           "given": "authenticated as customer_001 (User A)",
@@ -563,25 +1352,36 @@
       ]
     },
     {
-      "id": "LAW-002",
+      "id": "LAW-003",
       "category": "ADMIN",
       "severity": "High",
-      "title": "Non-Administrator roles cannot invoke admin-only actions.",
-      "source": "EP-005 POST /admin/refund + admin role='Administrator'",
+      "title": "Only Administrator may invoke POST /admin/refund; Customer must be denied.",
+      "source": "endpoint:POST /admin/refund; permission:Administrator.Refund=true; permission:Customer.Admin Refund=false; role:Administrator; role:Customer",
       "confidence": "HIGH",
       "score": 90,
-      "reason": "Admin endpoints isolated to role 'Administrator'.",
-      "invariant": "role!=Administrator → DENY(POST /admin/refund)",
+      "reason": "HIGH: privileged role + other roles + explicit deny permission. MEDIUM: privileged role + other roles. LOW: otherwise.",
+      "invariant": "∀ caller c, request to {EP-005}: ALLOW(c) ⇒ role(c) ∈ {Administrator}; role(c) ∈ {Customer} ⇒ DENY(c)",
       "appliesTo": {
         "endpoints": [
           "EP-005"
         ],
-        "resources": [],
+        "resources": [
+          "Refund"
+        ],
         "fields": [],
         "roles": [
+          "Administrator",
           "Customer"
+        ],
+        "identities": [
+          "admin_001",
+          "customer_001",
+          "customer_002"
         ]
       },
+      "constitutionLawIds": [
+        "LAW-003"
+      ],
       "tests": [
         {
           "given": "authenticated as customer_001 (non-admin)",
@@ -596,15 +1396,15 @@
       ]
     },
     {
-      "id": "LAW-003",
+      "id": "LAW-004",
       "category": "DATA",
-      "severity": "Medium",
-      "title": "Foreign objects must not expose private/sensitive data.",
-      "source": "Sensitive: User.customerName, User.phone, User.address, Order.customerName, Order.phone, Order.address, Order.paymentMetadata, Invoice.paymentMetadata",
+      "severity": "High",
+      "title": "Invoice responses must not expose paymentMetadata to callers who do not own the parent Order (ownership field Order.customerId). (+2 related laws: LAW-005, LAW-006)",
+      "source": "endpoint:GET /orders/{id}/invoice; relationship:Invoice→Order; schema:Order.customerId; sensitivity:Invoice.paymentMetadata=SENSITIVE; endpoint:GET /orders/{id}; sensitivity:Order.address=PERSONAL; sensitivity:Order.customerName=PERSONAL; sensitivity:Order.paymentMetadata=SENSITIVE",
       "confidence": "MEDIUM",
       "score": 60,
-      "reason": "Heuristic — RISK until Part-2 runtime proof.",
-      "invariant": "IF owner(o)!=caller THEN response MUST NOT contain PERSONAL/SENSITIVE",
+      "reason": "HIGH: analyst-confirmed sensitivity + ownership field. MEDIUM: ownership field or SENSITIVE-level fields. LOW: PERSONAL-only fields without ownership.",
+      "invariant": "∀ caller c, Invoice o returned by {EP-004}: Order(o).customerId ≠ c ⇒ fields(response) ∩ {paymentMetadata} = ∅",
       "appliesTo": {
         "endpoints": [
           "EP-001",
@@ -612,22 +1412,31 @@
           "EP-004"
         ],
         "resources": [
-          "User",
+          "Invoice",
           "Order",
-          "Invoice"
+          "User"
         ],
         "fields": [
-          "User.customerName",
-          "User.phone",
-          "User.address",
-          "Order.customerName",
-          "Order.phone",
+          "Invoice.paymentMetadata",
           "Order.address",
+          "Order.customerId",
+          "Order.customerName",
           "Order.paymentMetadata",
-          "Invoice.paymentMetadata"
+          "Order.phone",
+          "User.address",
+          "User.customerName",
+          "User.phone"
         ],
-        "roles": []
+        "roles": [
+          "Customer"
+        ],
+        "identities": []
       },
+      "constitutionLawIds": [
+        "LAW-004",
+        "LAW-005",
+        "LAW-006"
+      ],
       "tests": [
         {
           "given": "authenticated as customer_001",
@@ -637,15 +1446,15 @@
       ]
     },
     {
-      "id": "LAW-004",
+      "id": "LAW-007",
       "category": "AUTHN",
       "severity": "High",
-      "title": "Protected endpoints require authenticated identity.",
-      "source": "5/5 protected",
+      "title": "Endpoints secured by bearerAuth must reject requests without valid credentials.",
+      "source": "endpoint:GET /orders/{id}; endpoint:GET /orders/{id}/invoice; endpoint:GET /users/{id}; endpoint:POST /admin/refund; endpoint:POST /orders; security:bearerAuth",
       "confidence": "HIGH",
       "score": 90,
-      "reason": "Declared security requirement (operation or root level).",
-      "invariant": "unauthenticated → DENY(protected)",
+      "reason": "HIGH: declared requirement with declared, typed schemes. MEDIUM: declared requirement but a scheme is undeclared or untyped.",
+      "invariant": "∀ request r to {EP-001, EP-002, EP-003, EP-004, EP-005}: ¬authenticated(r, bearerAuth) ⇒ DENY(r)",
       "appliesTo": {
         "endpoints": [
           "EP-001",
@@ -656,8 +1465,12 @@
         ],
         "resources": [],
         "fields": [],
-        "roles": []
+        "roles": [],
+        "identities": []
       },
+      "constitutionLawIds": [
+        "LAW-007"
+      ],
       "tests": [
         {
           "given": "no token",
@@ -744,28 +1557,28 @@
       "expect": "DENY (auth)"
     },
     {
-      "law": "LAW-002",
+      "law": "LAW-003",
       "category": "ADMIN",
       "given": "authenticated as customer_001 (non-admin)",
       "when": "POST /admin/refund",
       "expect": "DENY (403) — violation = broken access control"
     },
     {
-      "law": "LAW-002",
+      "law": "LAW-003",
       "category": "ADMIN",
       "given": "authenticated as admin_001 (Administrator)",
       "when": "POST /admin/refund",
       "expect": "ALLOW"
     },
     {
-      "law": "LAW-003",
+      "law": "LAW-004",
       "category": "DATA",
       "given": "authenticated as customer_001",
       "when": "GET /orders/102 (foreign, owner=customer_002)",
       "expect": "MUST NOT contain PERSONAL/SENSITIVE of another owner — leak = excessive exposure"
     },
     {
-      "law": "LAW-004",
+      "law": "LAW-007",
       "category": "AUTHN",
       "given": "no token",
       "when": "GET /users/{id}",

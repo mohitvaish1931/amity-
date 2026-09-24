@@ -3,6 +3,7 @@
 // inferences and laws on top of that model and renders them. All rendering goes through html``/setHtml,
 // which escape every interpolated value.
 import { analyzeSpecText } from "../src/model/index";
+import { generateSecurityConstitution, toLegacyLaws } from "../src/constitution/index";
 import { fillPath, lastPathParam } from "../src/paths/index";
 import { deriveTargetAuthorization } from "../src/target/authorization";
 import { html, joinHtml, setHtml } from "../src/ui/safe-html";
@@ -10,7 +11,7 @@ import { mountSecurityTwinGraph } from "../src/twin/mount";
 
 const $ = (id) => document.getElementById(id);
 const LEVELS = ["PUBLIC", "PERSONAL", "INTERNAL", "SENSITIVE"];
-let STATE = { specText:"", apiModel:null, baseUrl:"", endpoints:[], resources:{}, laws:[], twin:null, model:null, warnings:[], specInfo:{}, sandbox:{status:"idle"}, inferences:[], overrides:{}, dashboard:null,
+let STATE = { specText:"", apiModel:null, constitution:null, baseUrl:"", endpoints:[], resources:{}, laws:[], twin:null, model:null, warnings:[], specInfo:{}, sandbox:{status:"idle"}, inferences:[], overrides:{}, dashboard:null,
   config:{ identities:[], permissions:{}, ownership:{} } };
 
 // ---------- config-driven helpers (no hardcoded roles/names) ----------
@@ -151,91 +152,37 @@ function lawTestsFor(law){
   }
   if(law.category==="DATA") return [
     { given:`authenticated as ${f.baseId.id}`, when:forWhen, expect:"MUST NOT contain PERSONAL/SENSITIVE of another owner — leak = excessive exposure" }];
+  if(law.category==="POLICY") return [];
   if(law.category==="AUTHN") return [{ given:"no token", when:f.protEp?`${f.protEp.method} ${f.protEp.path}`:"protected endpoint", expect:"DENY 401" }];
   const priv = privilegedActions();
   return [{ given:`roles=[${distinctRoles().join(", ")}]`, when:`invoke privileged action (${priv.slice(0,3).join(", ")||"restricted"})`, expect:`ALLOW ⟺ role has permission` }];
 }
 
-function buildLaws(endpoints, resources){
-  const laws=[]; let n=1; const nid=()=>("LAW-"+String(n++).padStart(3,"0"));
-  const idGets = endpoints.filter(isIdGet);
-  const adminEps = endpoints.filter(e=>e.action==="AdminAction"||e.resource==="Admin");
-  const protectedEps = endpoints.filter(e=>e.auth);
-  const openEps = endpoints.filter(e=>!e.auth);
-  const sensFields = [];
-  Object.keys(resources).forEach(r=>Object.keys(resources[r].fields).forEach(f=>{ const s=resources[r].fields[f]; if(s.sensitivity==="PERSONAL"||s.sensitivity==="SENSITIVE") sensFields.push(`${r}.${f}`); }));
-  const ownedResources = Object.keys(resources).filter(r=>resources[r].ownershipField);
-  const adminRole = detectAdminRole(); const bases = baseRoles();
-  const baseLabel = bases[0] || distinctRoles().filter(r=>r!==adminRole)[0] || distinctRoles()[0] || "Non-admin";
-  // Structured scope: which model entities each law governs (consumed by the Security Twin graph).
-  const scope = (s)=>({ endpoints:[], resources:[], fields:[], roles:[], ...s });
-  const ids = (eps)=>eps.map(e=>e.id);
-
-  if(idGets.length){
-    // data-driven target: owned resources covered by ID-GETs, ranked by endpoint + sensitive-field count
-    const bt = bolaTarget();
-    const target = (bt&&bt.target) || ownedResources[0] || idGets[0].resource;
-    const of = resources[target]&&resources[target].ownershipField;
-    const law={ id:nid(), category:"BOLA", severity:"High", title:`${baseLabel} can access only owned ${target} objects.`,
-      source: of? `Ownership field '${of}' on ${target} + ${idGets.map(e=>e.id).join(", ")} + map ${ownershipSample()}` : `ID reads (${idGets.map(e=>e.id).join(", ")}) without ownership field`,
-      confidence: of&&Object.keys(cfgOwnership()).length?"HIGH":"MEDIUM", score: of&&Object.keys(cfgOwnership()).length?90:60,
-      reason: of? `Ownership field '${of}' + configured map isolates ${target}.` : "Candidate — needs sandbox proof.",
-      invariant:`∀ ${baseLabel} c, ${target.toLowerCase()} o: ALLOW(GET ${idGets[0].path}) ⟺ owner(o)==c`,
-      appliesTo: scope({ endpoints:ids(idGets), resources:[target], fields: of?[`${target}.${of}`]:[], roles: bases }) };
-    law.tests=lawTestsFor(law); laws.push(law);
-  }
-  if(adminEps.length&&adminRole){
-    const law={ id:nid(), category:"ADMIN", severity:"High", title:`Non-${adminRole} roles cannot invoke admin-only actions.`,
-      source:adminEps.map(e=>e.id+" "+e.method+" "+e.path).join("; ")+` + admin role='${adminRole}'`,
-      confidence:"HIGH", score:90,
-      reason:`Admin endpoints isolated to role '${adminRole}'.`,
-      invariant:`role!=${adminRole} → DENY(${adminEps.map(e=>e.method+" "+e.path).join(", ")})`,
-      appliesTo: scope({ endpoints:ids(adminEps), roles: bases }) };
-    law.tests=lawTestsFor(law); laws.push(law);
-  } else if(adminEps.length){
-    STATE.warnings.push("Admin endpoints found but no admin role in configuration — ADMIN law skipped. Add an admin role to identities.");
-  }
-  if(sensFields.length){
-    const law={ id:nid(), category:"DATA", severity:"Medium", title:"Foreign objects must not expose private/sensitive data.",
-      source:`Sensitive: ${sensFields.slice(0,8).join(", ")}${sensFields.length>8?"…":""}`, confidence:"MEDIUM", score:60,
-      reason:"Heuristic — RISK until Part-2 runtime proof.", invariant:"IF owner(o)!=caller THEN response MUST NOT contain PERSONAL/SENSITIVE",
-      appliesTo: scope({ endpoints:ids(idGets), resources:[...new Set(sensFields.map(f=>f.slice(0,f.indexOf("."))))], fields:sensFields }) };
-    law.tests=lawTestsFor(law); laws.push(law);
-  }
-  if(protectedEps.length){
-    const law={ id:nid(), category:"AUTHN", severity:"High", title:"Protected endpoints require authenticated identity.",
-      source:`${protectedEps.length}/${endpoints.length} protected`, confidence:"HIGH", score:90,
-      reason:"Declared security requirement (operation or root level).", invariant:"unauthenticated → DENY(protected)",
-      appliesTo: scope({ endpoints:ids(protectedEps) }) };
-    law.tests=lawTestsFor(law); laws.push(law);
-  }
-  if(openEps.length){
-    const law={ id:nid(), category:"AUTHN", severity:"Medium", title:"Open endpoints must be intentional.",
-      source:`Open: ${openEps.map(e=>`${e.id}(${e.authMode})`).join(", ")}`, confidence:"MEDIUM", score:60,
-      reason:"Public or optional-auth per spec — confirm no sensitive data.", invariant:"public response MUST NOT contain PERSONAL/SENSITIVE",
-      appliesTo: scope({ endpoints:ids(openEps) }) };
-    law.tests=lawTestsFor(law); laws.push(law);
-  }
-  const priv = privilegedActions(); const roles = distinctRoles();
-  if(priv.length&&roles.length>1){
-    const law={ id:nid(), category:"ROLE", severity:"High", title:"Sensitive actions must respect role boundaries.",
-      source:`Permission matrix: ${roles.join(" vs ")}; contested: ${priv.join(", ")}`, confidence:"HIGH", score:90,
-      reason:`Contested actions (${priv.slice(0,4).join(", ")}) differ by role.`, invariant:`privileged ALLOW ⟺ role permission == true`,
-      appliesTo: scope({ roles }) };
-    law.tests=lawTestsFor(law); laws.push(law);
-  }
-  return laws;
+/** Configuration in the typed shape the Constitution engine expects. The admin role comes from a name heuristic, recorded as such. */
+function constitutionConfig(){
+  const adminRole = detectAdminRole(); const perms = cfgPermissions();
+  const roleNames = [...new Set([...distinctRoles(), ...Object.keys(perms)])];
+  return {
+    identities: cfgIdentities().map(i=>({ id:String(i.id), name:String(i.name??i.id), role:String(i.role??"") })),
+    roles: roleNames.map(r=>({ name:r, permissions: perms[r]&&typeof perms[r]==="object"?perms[r]:{}, privileged: r===adminRole,
+      ...(r===adminRole?{ privilegeEvidence:`role name "${r}" contains "admin" (name heuristic)` }:{}) })),
+    ownership: Object.entries(cfgOwnership()).map(([objectId,ownerId])=>({ objectId, ownerId:String(ownerId) })),
+    sensitivityOverrides: { ...STATE.overrides },
+  };
 }
+/** Step 2 contract: one legacy law per legacy category, derived from the constitution, with Given/When/Expect tests. */
+function buildLegacyLaws(constitution){ return toLegacyLaws(constitution).map(l=>({ ...l, tests: lawTestsFor(l) })); }
 
 function buildDashboard(){
   const eps = STATE.endpoints, res = STATE.resources;
   const prot = eps.filter(e=>e.auth).length, open = eps.length-prot;
   const fields = Object.values(res).reduce((a,r)=>a+Object.keys(r.fields).length,0);
   const sens = Object.values(res).reduce((a,r)=>a+Object.values(r.fields).filter(f=>f.sensitivity==="PERSONAL"||f.sensitivity==="SENSITIVE").length,0);
-  const high = STATE.laws.filter(l=>l.confidence==="HIGH").length, med = STATE.laws.filter(l=>l.confidence==="MEDIUM").length;
+  const laws = STATE.constitution ? STATE.constitution.laws : [];
+  const high = laws.filter(l=>l.confidence==="HIGH").length, med = laws.filter(l=>l.confidence==="MEDIUM").length, low = laws.filter(l=>l.confidence==="LOW").length;
   const owned = Object.keys(res).filter(r=>res[r].ownershipField).length;
-  const readiness = eps.length? Math.round(100*(0.3*Math.min(1,Object.keys(res).length/3)+0.3*(prot/eps.length)+0.2*(owned/Math.max(1,Object.keys(res).length))+0.2*Math.min(1,STATE.laws.length/5))) : 0;
-  return { endpoints:eps.length, resources:Object.keys(res).length, protected:prot, open, fields, sens, high, med, owned, readiness, sandbox:STATE.sandbox.status,
+  const readiness = eps.length? Math.round(100*(0.3*Math.min(1,Object.keys(res).length/3)+0.3*(prot/eps.length)+0.2*(owned/Math.max(1,Object.keys(res).length))+0.2*Math.min(1,laws.length/5))) : 0;
+  return { endpoints:eps.length, resources:Object.keys(res).length, protected:prot, open, fields, sens, high, med, low, owned, readiness, sandbox:STATE.sandbox.status,
     authorization:targetAuthorization().label, roles:distinctRoles(), adminRole:detectAdminRole(), identities:cfgIdentities().length };
 }
 
@@ -246,13 +193,13 @@ function buildTestableModel(){
     sandboxCheck:STATE.sandbox, specInfo:STATE.specInfo, warnings:STATE.warnings,
     testIdentities:cfgIdentities(), permissions:cfgPermissions(),
     ownership:Object.entries(cfgOwnership()).map(([objectId,ownerId])=>({objectId,ownerId,ownerName:idToName(ownerId)})),
-    endpoints:STATE.endpoints, resources:STATE.resources, twin:STATE.twin, laws:STATE.laws, inferences:STATE.inferences,
+    endpoints:STATE.endpoints, resources:STATE.resources, twin:STATE.twin, constitution:STATE.constitution, laws:STATE.laws, inferences:STATE.inferences,
     expectedBehavior: STATE.laws.flatMap(l=> (l.tests||[]).map(t=>({ law:l.id, category:l.category, ...t }))) };
 }
 
 // ---------- render ----------
 function setSteps(n){ ["s1","s2","s3","s4","s5"].forEach((id,i)=> $(id).classList.toggle("done", i<n)); }
-function renderAll(){ renderDashboard(); renderDiscovery(); renderModel(); renderIdentity(); renderSens(); renderTwin(); renderInferences(); renderLaws(); renderLawTests(); renderOutputs(); setSteps(5); }
+function renderAll(){ renderDashboard(); renderDiscovery(); renderModel(); renderIdentity(); renderSens(); renderTwin(); renderInferences(); renderConstitution(); renderLawTests(); renderOutputs(); setSteps(5); }
 
 function renderDashboard(){
   const d = STATE.dashboard; if(!d){ $("dashboard").textContent="—"; return; }
@@ -261,7 +208,7 @@ function renderDashboard(){
     <div class="tile"><b>${d.resources}</b><span class="sub">resources</span></div>
     <div class="tile"><b>${d.protected}/${d.open}</b><span class="sub">protected/open</span></div>
     <div class="tile"><b>${d.fields}</b><span class="sub">fields (${d.sens} sens)</span></div>
-    <div class="tile"><b>${d.high}H/${d.med}M</b><span class="sub">laws</span></div>
+    <div class="tile"><b>${d.high}H/${d.med}M/${d.low}L</b><span class="sub">constitution laws</span></div>
     <div class="tile"><b>${d.identities}</b><span class="sub">identities (${d.roles.join(", ")||"—"})</span></div></div>
     <p class="sub">Part-2 readiness: <b>${d.readiness}%</b> · sandbox: ${d.sandbox} · target: ${d.authorization} · admin role: ${d.adminRole||"none"} ${STATE.warnings.length?`· ⚠ ${STATE.warnings.length} warnings`:""}</p>
     <div class="bar"><i style="width:${d.readiness}%"></i></div>`);
@@ -319,17 +266,16 @@ let twinView = null;
 /** Graph input built only from the typed model, configuration and generated laws. */
 function twinGraphInput(){
   if(!STATE.apiModel) return null;
-  const adminRole = detectAdminRole(); const perms = cfgPermissions();
-  const roleNames = [...new Set([...distinctRoles(), ...Object.keys(perms)])];
+  const cfg = constitutionConfig();
   return {
     endpoints: STATE.apiModel.endpoints,
     resources: STATE.apiModel.resources,
-    identities: cfgIdentities().map(i=>({ id:String(i.id), name:String(i.name??i.id), role:String(i.role??"") })),
-    roles: roleNames.map(r=>({ name:r, permissions: perms[r]&&typeof perms[r]==="object"?perms[r]:{}, privileged: r===adminRole })),
-    laws: STATE.laws,
-    ownership: Object.entries(cfgOwnership()).map(([objectId,ownerId])=>({ objectId, ownerId:String(ownerId) })),
-    privilegedEndpoints: adminRole && STATE.twin ? STATE.twin.adminEndpoints : [],
-    sensitivityOverrides: { ...STATE.overrides },
+    identities: cfg.identities,
+    roles: cfg.roles,
+    laws: STATE.constitution ? STATE.constitution.laws : [],
+    ownership: cfg.ownership,
+    privilegedEndpoints: detectAdminRole() && STATE.twin ? STATE.twin.adminEndpoints : [],
+    sensitivityOverrides: cfg.sensitivityOverrides,
   };
 }
 function renderTwin(){
@@ -341,11 +287,41 @@ function renderInferences(){
   setHtml($("inferences"), html`${STATE.inferences.map(i=>html`<div class="law"><h3>${i.id} <span class="badge b-${i.confidence}">${i.confidence} ${i.score}</span></h3>
     <div>${i.claim}</div><div class="sub">Evidence: ${i.evidence.join(" · ")}</div><div class="sub">To raise confidence: ${i.needed}</div></div>`)}`);
 }
-function renderLaws(){
-  setHtml($("laws"), html`${STATE.laws.map(l=>html`<div class="law"><h3>${l.id} [${l.category}/${l.severity}] <span class="badge b-${l.confidence}">${l.confidence} ${l.score}</span></h3>
-    <div>${l.title}</div><div class="sub">Source: ${l.source}</div><div class="sub">Reason: ${l.reason}</div>
-    <div class="inv">${l.invariant}</div></div>`)}
-    <div class="note">HIGH (80-100) = explicit evidence from spec+config. MEDIUM (50-79) = heuristic → RISK, needs Part-2 runtime proof. No auto-vuln.</div>`);
+const CATEGORY_LABEL = { OBJECT_AUTHORIZATION:"Object authorization", FUNCTION_AUTHORIZATION:"Function authorization", DATA_EXPOSURE:"Data exposure",
+  AUTHENTICATION:"Authentication", STATE_TRANSITION:"State transition", SECURITY_CONFIGURATION:"Security configuration" };
+function endpointLabel(id){ const e=STATE.endpoints.find(x=>x.id===id); return e?`${id} ${e.method} ${e.path}`:id; }
+function renderConstitution(){
+  const c = STATE.constitution;
+  if(!c){ $("laws").textContent="—"; return; }
+  const counts = Object.keys(CATEGORY_LABEL).map(k=>[k, c.laws.filter(l=>l.category===k).length]).filter(([,n])=>n);
+  const scopeRow = (label, items)=> items.length ? html`<div><b>${label}:</b> ${items.join(" · ")}</div>` : "";
+  const cards = c.laws.map(l=>html`<details class="law const-law" data-law="${l.id}">
+    <summary><b>${l.id}</b> <span class="badge">${CATEGORY_LABEL[l.category]||l.category}</span> <span class="badge">${l.severity}</span>
+      <span class="badge b-${l.confidence}">${l.confidence} · ${l.confidenceRationale.score}% of signals</span>
+      <div class="const-statement">${l.statement}</div></summary>
+    <div class="const-body">
+      <h4>Machine rule</h4><div class="inv">${l.invariant}</div>
+      <details><summary class="sub">rule JSON</summary><pre class="out">${JSON.stringify(l.rule,null,2)}</pre></details>
+      <h4>Scope</h4>
+      ${scopeRow("Endpoints", l.appliesTo.endpoints.map(endpointLabel))}${scopeRow("Resources", l.appliesTo.resources)}${scopeRow("Fields", l.appliesTo.fields)}
+      ${scopeRow("Roles", l.appliesTo.roles)}${scopeRow("Identities", l.appliesTo.identities.map(id=>`${idToName(id)} (${id})`))}
+      <h4>Provenance (${l.provenance.length})</h4><ul>${l.provenance.map(p=>html`<li><code>${p.ref}</code> — ${p.detail}</li>`)}</ul>
+      <h4>Confidence: ${l.confidence}</h4><p class="sub">${l.confidenceRationale.rule}</p>
+      <ul>${l.confidenceRationale.signals.map(s=>html`<li>${s.present?"✅":"❌"} ${s.description}</li>`)}</ul>
+      <h4>Test strategy <span class="sub">(${l.testStrategy.kind} · specification only, not executed)</span></h4>
+      ${l.testStrategy.preconditions.length?html`<div class="sub">Preconditions: ${l.testStrategy.preconditions.join(" · ")}</div>`:""}
+      <ol>${l.testStrategy.steps.map(st=>html`<li>${st}</li>`)}</ol><div><b>Expected:</b> ${l.testStrategy.expected}</div>
+      <div class="row"><button class="ghost" type="button" data-focus-law="${l.id}">Highlight scope in graph</button></div>
+    </div></details>`);
+  setHtml($("laws"), html`<p class="sub">${c.laws.length} laws · ${counts.map(([k,n])=>`${n} ${CATEGORY_LABEL[k].toLowerCase()}`).join(" · ")}</p>${cards}
+    ${c.notes.length?html`<div class="note">${joinHtml(c.notes, html`<br>`)}</div>`:""}
+    <div class="note">Laws are derived from the spec model and configuration. Confidence is computed from the listed evidence signals; test strategies are specifications, not executed tests.</div>`);
+  document.querySelectorAll("#laws [data-focus-law]").forEach(b=>b.onclick=()=>focusLaw(b.dataset.focusLaw));
+}
+function focusLaw(id){
+  document.querySelectorAll("#laws details.const-law").forEach(d=>d.classList.toggle("is-focused", d.dataset.law===id));
+  if(twinView) twinView.focusLaw(id);
+  const g=$("twinGraph"); if(g&&g.scrollIntoView) g.scrollIntoView({ behavior:"smooth", block:"center" });
 }
 function renderLawTests(){
   setHtml($("lawTests"), html`${STATE.laws.map(l=>html`<div class="law"><h3>${l.id} tests</h3>${(l.tests||[]).map(t=>html`<div>· <b>Given</b> ${t.given} <b>When</b> <code>${t.when}</code> <b>Expect</b> ${t.expect}</div>`)}</div>`)}`);
@@ -354,7 +330,7 @@ function renderOutputs(){
   const m = buildTestableModel(); STATE.model = m;
   $("out1").textContent = JSON.stringify({version:STATE.specInfo.version, servers:STATE.specInfo.servers, count:STATE.endpoints.length, endpoints:STATE.endpoints},null,2);
   $("out2").textContent = JSON.stringify({resources:STATE.resources, twin:STATE.twin, ownership:cfgOwnership(), identities:cfgIdentities()},null,2);
-  $("out3").textContent = JSON.stringify(STATE.laws,null,2);
+  $("out3").textContent = JSON.stringify(STATE.constitution,null,2);
   $("out4").textContent = JSON.stringify(m,null,2);
 }
 
@@ -379,7 +355,8 @@ function rebuild(){
   STATE.warnings = [...r.view.warnings]; // fresh each rebuild; laws may append below
   STATE.twin = buildTwin(STATE.endpoints, STATE.resources);
   STATE.inferences = buildInferences(STATE.endpoints, STATE.resources);
-  STATE.laws = buildLaws(STATE.endpoints, STATE.resources);
+  STATE.constitution = generateSecurityConstitution(STATE.apiModel, constitutionConfig());
+  STATE.laws = buildLegacyLaws(STATE.constitution);
   STATE.dashboard = buildDashboard();
   renderAll();
 }

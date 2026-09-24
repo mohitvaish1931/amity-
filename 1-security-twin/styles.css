@@ -31,3 +31,10 @@ code{background:#020617;padding:2px 6px;border-radius:6px;border:1px solid var(-
 .steps{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.step{font-size:12px;padding:6px 10px;border-radius:20px;border:1px solid var(--line);color:var(--mut)}.step.done{color:#4ade80;border-color:#14532d;background:#052e1b}
 pre.out{background:#020617;border:1px solid var(--line);border-radius:10px;padding:10px;max-height:260px;overflow:auto;font-size:12px}
 .note{font-size:12px;color:var(--mut);background:#020617;border-left:3px solid var(--yel);padding:8px 10px;border-radius:0 8px 8px 0;margin-top:10px}
+/* Security Constitution panel */
+details.const-law{padding:10px 12px}
+details.const-law>summary{cursor:pointer;list-style:revert}
+details.const-law .const-statement{margin-top:6px;font-weight:600}
+details.const-law .const-body h4{margin:12px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+details.const-law .const-body ul,details.const-law .const-body ol{margin:4px 0;padding-left:20px;font-size:13px}
+details.const-law.is-focused{outline:2px solid #f59e0b;outline-offset:2px}

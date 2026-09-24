@@ -43,9 +43,17 @@ Classification works on whole-word tokens after camelCase/snake splitting, so `f
 
 Analysts can override any field in step 1, keyed by `Resource.fieldPath`. Overrides survive rebuilds.
 
-## 4. Laws (step 1)
+## 4. Security Constitution (laws)
 
-Laws are generated from the model and config. There are six categories: BOLA, ADMIN, DATA, AUTHN (protected), AUTHN (open) and ROLE. Each law carries a source, confidence, invariant text and Given/When/Expect tests. Confidence reflects spec and config evidence only. A law is a hypothesis to verify, not a finding.
+Laws come from `generateSecurityConstitution(model, config)` (`src/constitution`). It is pure and deterministic, and makes no requests. The categories are `AUTHENTICATION`, `OBJECT_AUTHORIZATION`, `FUNCTION_AUTHORIZATION`, `DATA_EXPOSURE`, `STATE_TRANSITION` and `SECURITY_CONFIGURATION`. Each law has:
+
+- a human-readable **statement** and a separate typed **machine rule** (with a formal invariant);
+- a precise **scope**: endpoints, resources, fields, roles and identities;
+- **provenance**: every piece of evidence as a resolvable reference, with heuristics labelled;
+- an explainable **confidence**: per-category rules over named evidence signals, with each signal shown as present or missing;
+- a **test strategy**, which is a specification only (`executable: false`).
+
+A law is a hypothesis to verify, not a finding. See [SECURITY_CONSTITUTION.md](SECURITY_CONSTITUTION.md) for the derivation rules, confidence thresholds, scope rules and the Step 2 mapping. Step 2 still receives laws in the legacy categories (BOLA/ADMIN/DATA/AUTHN/ROLE/POLICY) through `toLegacyLaws()`.
 
 ## 5. Findings (contract)
 

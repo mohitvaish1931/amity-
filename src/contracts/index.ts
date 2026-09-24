@@ -161,6 +161,8 @@ export interface Role {
   name: string;
   permissions: Record<string, boolean>;
   privileged: boolean;
+  /** Where `privileged` came from (e.g. explicit configuration or a name heuristic). Shown as provenance. */
+  privilegeEvidence?: string;
 }
 
 export interface ApiModel {
@@ -178,29 +180,114 @@ export interface ApiModel {
 
 // ---------- constitution, tests, findings ----------
 
-export type LawCategory = "BOLA" | "ADMIN" | "DATA" | "AUTHN" | "ROLE";
 export type Severity = "Low" | "Medium" | "High" | "Critical";
 export type Confidence = "HIGH" | "MEDIUM" | "LOW";
 
-/** Model entities a law governs. Field entries are "Resource.fieldPath". */
+/** Security Constitution law categories. */
+export type LawCategory =
+  | "AUTHENTICATION"
+  | "OBJECT_AUTHORIZATION"
+  | "FUNCTION_AUTHORIZATION"
+  | "DATA_EXPOSURE"
+  | "STATE_TRANSITION"
+  | "SECURITY_CONFIGURATION";
+
+/** Categories of the Step 1 → Step 2 export contract (testable-security-model.json `laws`). */
+export type LegacyLawCategory = "BOLA" | "ADMIN" | "DATA" | "AUTHN" | "ROLE" | "POLICY";
+
+/** Model entities a law governs. Field entries are "Resource.fieldPath"; identities are configured identity ids. */
 export interface LawScope {
   endpoints: string[];
   resources: string[];
   fields: string[];
   roles: string[];
+  identities: string[];
+}
+
+export type ProvenanceKind =
+  | "endpoint"
+  | "path"
+  | "security"
+  | "schema"
+  | "sensitivity"
+  | "relationship"
+  | "role"
+  | "identity"
+  | "ownership"
+  | "permission";
+
+/** One piece of model/configuration evidence behind a law, e.g. { ref: "schema:Order.customerId" }. */
+export interface Provenance {
+  kind: ProvenanceKind;
+  ref: string;
+  detail: string;
+}
+
+export interface ConfidenceSignal {
+  id: string;
+  description: string;
+  present: boolean;
+}
+
+/** Why a law has its confidence: which evidence signals were present and which were missing. */
+export interface ConfidenceRationale {
+  level: Confidence;
+  /** Share of signals present, 0..100. */
+  score: number;
+  signals: ConfidenceSignal[];
+  rule: string;
+}
+
+/** Machine-readable form of a law, kept separate from the human-readable statement. */
+export type LawRule =
+  | { type: "requires-authentication"; endpoints: string[]; schemes: string[] }
+  | { type: "owner-only-access"; resource: string; ownershipField: string | null; subjectRoles: string[]; endpoints: string[]; operations: ("read" | "write")[] }
+  | { type: "role-restricted"; endpoints: string[]; allowedRoles: string[]; deniedRoles: string[] }
+  | {
+      type: "no-unauthorized-field-exposure";
+      resource: string;
+      fields: string[];
+      endpoints: string[];
+      ownershipField: string | null;
+      /** "Parent.field" when entitlement follows an owned parent the resource is only reachable through. */
+      inheritedFrom: string | null;
+    }
+  | { type: "guarded-state-transition"; resource: string; stateField: string; states: string[]; endpoints: string[] }
+  | { type: "explicit-public-access"; endpoints: string[]; mode: "public" | "optional"; exposesSensitiveFields: string[] }
+  | { type: "declared-security-schemes"; endpoints: string[]; undeclaredSchemes: string[] }
+  | { type: "permission-matrix"; roles: string[]; contestedActions: string[] };
+
+/** Static test specification. Sentinel X does not execute these in the current phase. */
+export interface TestStrategy {
+  kind: string;
+  preconditions: string[];
+  steps: string[];
+  expected: string;
+  executable: false;
 }
 
 export interface SecurityLaw {
   id: string;
+  /** Deduplication key: laws with the same key are merged. */
+  key: string;
   category: LawCategory;
   severity: Severity;
-  title: string;
-  /** Machine-readable invariant text, e.g. "∀ c, o: ALLOW(GET /orders/{id}) ⟺ owner(o)==c". */
+  statement: string;
+  rule: LawRule;
+  /** Formal rendering of `rule`, for display. */
   invariant: string;
-  source: string;
-  confidence: Confidence;
-  score: number;
   appliesTo: LawScope;
+  provenance: Provenance[];
+  confidence: Confidence;
+  confidenceRationale: ConfidenceRationale;
+  testStrategy: TestStrategy;
+}
+
+export interface SecurityConstitution {
+  version: "constitution-v1";
+  laws: SecurityLaw[];
+  /** Model facts that prevented a law from being generated or limited its confidence. */
+  notes: string[];
 }
 
 export type ExpectedOutcome = "ALLOW" | "DENY";

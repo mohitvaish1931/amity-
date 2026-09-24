@@ -1,0 +1,105 @@
+{
+  "openapi": "3.0.3",
+  "info": { "title": "Fixture: marketplace (constitution tests)", "version": "1" },
+  "security": [{ "bearer": [] }],
+  "paths": {
+    "/stores/{storeId}": {
+      "get": {
+        "parameters": [{ "name": "storeId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Store" } } } } }
+      }
+    },
+    "/stores/{storeId}/card": {
+      "get": {
+        "security": [],
+        "parameters": [{ "name": "storeId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Store" } } } } }
+      }
+    },
+    "/stores/{storeId}/listings": {
+      "post": {
+        "parameters": [{ "name": "storeId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Listing" } } } },
+        "responses": { "201": { "description": "" } }
+      }
+    },
+    "/listings/{listingId}": {
+      "parameters": [{ "name": "listingId", "in": "path", "required": true, "schema": { "type": "string" } }],
+      "get": { "responses": { "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Listing" } } } } } },
+      "patch": {
+        "requestBody": { "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Listing" } } } },
+        "responses": { "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Listing" } } } } }
+      },
+      "delete": { "responses": { "204": { "description": "" } } }
+    },
+    "/listings/{listingId}/publish": {
+      "post": {
+        "parameters": [{ "name": "listingId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "" } }
+      }
+    },
+    "/listings/{listingId}/reviews": {
+      "get": {
+        "parameters": [{ "name": "listingId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Review" } } } } }
+        }
+      }
+    },
+    "/buyers/{buyerId}": {
+      "get": {
+        "parameters": [{ "name": "buyerId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Buyer" } } } } }
+      }
+    },
+    "/admin/payouts": {
+      "post": { "responses": { "202": { "description": "" } } }
+    },
+    "/catalog": {
+      "get": {
+        "security": [],
+        "responses": {
+          "200": { "description": "", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CatalogItem" } } } } }
+        }
+      }
+    },
+    "/ops/metrics": {
+      "get": { "security": [{}, { "bearer": [] }], "responses": { "200": { "description": "" } } }
+    },
+    "/legacy/export": {
+      "get": { "security": [{ "ghostKey": [] }], "responses": { "200": { "description": "" } } }
+    }
+  },
+  "components": {
+    "securitySchemes": { "bearer": { "type": "http", "scheme": "bearer" } },
+    "schemas": {
+      "Store": {
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "ownerUserId": { "type": "string" }, "supportEmail": { "type": "string" }, "title": { "type": "string" } }
+      },
+      "Listing": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "storeId": { "type": "string" },
+          "ownerId": { "type": "string" },
+          "title": { "type": "string" },
+          "status": { "type": "string", "enum": ["draft", "published", "archived"] },
+          "payoutAccountNumber": { "type": "string" }
+        }
+      },
+      "Review": {
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "listingId": { "type": "string" }, "authorEmail": { "type": "string" }, "rating": { "type": "integer" } }
+      },
+      "Buyer": {
+        "type": "object",
+        "properties": { "id": { "type": "string" }, "email": { "type": "string" }, "shippingAddress": { "type": "string" } }
+      },
+      "CatalogItem": {
+        "type": "object",
+        "properties": { "title": { "type": "string" }, "price": { "type": "number" } }
+      }
+    }
+  }
+}

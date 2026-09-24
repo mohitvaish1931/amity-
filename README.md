@@ -2,7 +2,7 @@
 
 OpenAPI security modelling for **authorized sandbox APIs only**. Step 1 turns an OpenAPI/Swagger spec plus a small config (users, roles, ownership) into an API model, a Security Twin and a set of security laws. Step 2 plans authorization test cases from that model.
 
-> Current phase: **foundation hardening** (parser, typed model, XSS safety, tests). See [progress.md](progress.md) for exactly what is and is not implemented.
+> Pipeline so far: **OpenAPI → API model → Security Twin → Security Constitution → test specification**, all static; no runtime testing. See [progress.md](progress.md) for exactly what is and is not implemented.
 
 ## Folder structure
 
@@ -17,6 +17,7 @@ amity/
 │   ├── openapi/                parser: JSON/YAML → normalized spec ($ref, composition, security semantics)
 │   ├── model/                  security model: resources, actions, field sensitivity, ownership
 │   ├── twin/                   Security Twin graph: pure transform + layout, React Flow view
+│   ├── constitution/           Security Constitution engine: laws + provenance + confidence + test specs
 │   ├── paths/                  fillPath: the single path-template filler (strict, encoded)
 │   ├── target/                 target authorization state (UNKNOWN / CONFIGURED / CONFIRMED)
 │   └── ui/safe-html.ts         escape-by-default HTML templating used by both apps
@@ -106,5 +107,6 @@ OpenAPI 3.0 / 3.1 and Swagger 2.0, as JSON or YAML: local `$ref` everywhere (sch
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): modules and data flow
 - [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md): how the model is derived, plus the app safety rules
+- [docs/SECURITY_CONSTITUTION.md](docs/SECURITY_CONSTITUTION.md): how security laws, provenance and confidence are derived
 - [docs/SANDBOX.md](docs/SANDBOX.md): the authorized-sandbox-only policy and its current enforcement
 - [docs/REPOSITORY_AUDIT.md](docs/REPOSITORY_AUDIT.md): the original audit

@@ -40,11 +40,11 @@ describe("Security Twin graph in Step 1", () => {
       role: 2,
       endpoint: 5,
       resource: 4,
-      law: 4,
+      law: 7,
     });
     expect(count("field")).toBeGreaterThan(0);
     expect(q(app, ".react-flow__edge").length).toBeGreaterThan(0);
-    expect(app.document.querySelector('[data-testid="twin-counts"]')!.textContent).toMatch(/3 identities · 2 roles · 5 endpoints · 4 resources · \d+ fields · 4 security laws · \d+ relationships/);
+    expect(app.document.querySelector('[data-testid="twin-counts"]')!.textContent).toMatch(/3 identities · 2 roles · 5 endpoints · 4 resources · \d+ fields · 7 security laws · \d+ relationships/);
   });
 
   it("uses only model data: endpoint and resource labels match the parsed spec", async () => {
@@ -93,10 +93,10 @@ describe("Security Twin graph in Step 1", () => {
     expect(q(app, ".twin-field")).toHaveLength(0);
 
     const lawFilter = app.document.querySelector<HTMLSelectElement>('[data-testid="twin-law-filter"]')!;
-    expect([...lawFilter.options].map((o) => o.value)).toEqual(["", "LAW-001", "LAW-002", "LAW-003", "LAW-004"]);
-    await change(app, lawFilter, "LAW-002");
+    expect([...lawFilter.options].map((o) => o.value)).toEqual(["", "LAW-001", "LAW-002", "LAW-003", "LAW-004", "LAW-005", "LAW-006", "LAW-007"]);
+    await change(app, lawFilter, "LAW-003"); // the administrative-endpoint law
     const highlighted = q(app, ".twin-node.is-highlight").map((n) => n.querySelector(".twin-label")!.textContent);
-    expect(highlighted.sort()).toEqual(["/admin/refund", "Customer", "LAW-002"]);
+    expect(highlighted.sort()).toEqual(["/admin/refund", "Admin", "Administrator", "Customer", "LAW-003", "Refund", "User A", "User B"]);
     expect(q(app, ".twin-node.is-dim").length).toBeGreaterThan(0);
   });
 

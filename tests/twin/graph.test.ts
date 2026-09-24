@@ -61,14 +61,14 @@ const baseInput: TwinGraphInput = {
   laws: [
     {
       id: "LAW-001",
-      category: "BOLA",
+      category: "OBJECT_AUTHORIZATION",
       severity: "High",
-      title: "Merchants access only owned listings.",
+      statement: "Merchants access only owned listings.",
       confidence: "HIGH",
-      score: 90,
       invariant: "owner(o)==caller",
-      source: "spec+config",
-      appliesTo: { endpoints: [ep("GET", "/listings/{listingId}")], resources: ["Listing"], fields: ["Listing.ownerId"], roles: ["Merchant"] },
+      provenance: [{ kind: "schema", ref: "schema:Listing.ownerId", detail: "ownership field" }],
+      confidenceRationale: { level: "HIGH", score: 100, signals: [], rule: "test" },
+      appliesTo: { endpoints: [ep("GET", "/listings/{listingId}")], resources: ["Listing"], fields: ["Listing.ownerId"], roles: ["Merchant"], identities: ["m1"] },
     },
   ],
 };
@@ -94,7 +94,7 @@ describe("buildTwinGraph: nodes", () => {
     expect((listing.meta.resourceEvidence as string[]).some((x) => x.startsWith("schema: Listing"))).toBe(true);
     const res = g.nodes.find((n) => n.id === nodeId.resource("Listing"))!;
     expect(res.meta).toMatchObject({ ownershipField: "ownerId", sensitiveFields: 1 });
-    expect(g.nodes.find((n) => n.id === nodeId.law("LAW-001"))!.meta).toMatchObject({ confidence: "HIGH", score: 90, category: "BOLA" });
+    expect(g.nodes.find((n) => n.id === nodeId.law("LAW-001"))!.meta).toMatchObject({ confidence: "HIGH", confidenceScore: 100, category: "OBJECT_AUTHORIZATION", statement: "Merchants access only owned listings.", provenance: ["schema:Listing.ownerId"] });
   });
 
   it("counts relationships per node", () => {
@@ -146,7 +146,7 @@ describe("buildTwinGraph: edges", () => {
   it("maps law scope to GOVERNS edges", () => {
     const law = nodeId.law("LAW-001");
     const governed = g.edges.filter((e) => e.source === law).map((e) => e.target).sort();
-    expect(governed).toEqual([nodeId.endpoint(ep("GET", "/listings/{listingId}")), nodeId.field("Listing", "ownerId"), nodeId.resource("Listing"), nodeId.role("Merchant")].sort());
+    expect(governed).toEqual([nodeId.endpoint(ep("GET", "/listings/{listingId}")), nodeId.field("Listing", "ownerId"), nodeId.identity("m1"), nodeId.resource("Listing"), nodeId.role("Merchant")].sort());
   });
 
   it("never creates VIOLATES edges without findings", () => {
@@ -217,7 +217,7 @@ describe("buildTwinGraph: robustness", () => {
 });
 
 describe("findings, laws and queries", () => {
-  const finding: Finding = { id: "F-1", state: "OBSERVED", lawId: "LAW-001", category: "BOLA", endpointId: ep("GET", "/listings/{listingId}"), summary: "", evidence: [] };
+  const finding: Finding = { id: "F-1", state: "OBSERVED", lawId: "LAW-001", category: "OBJECT_AUTHORIZATION", endpointId: ep("GET", "/listings/{listingId}"), summary: "", evidence: [] };
   const g = buildTwinGraph({ ...baseInput, findings: [finding] });
   const listingEp = nodeId.endpoint(ep("GET", "/listings/{listingId}"));
 
@@ -232,7 +232,7 @@ describe("findings, laws and queries", () => {
     expect(h.nodes.has(listingEp)).toBe(true);
     expect(h.nodes.has(nodeId.resource("Listing"))).toBe(true);
     expect(h.nodes.has(nodeId.resource("Store"))).toBe(false);
-    expect(h.edges.size).toBe(5);
+    expect(h.edges.size).toBe(6); // 5 GOVERNS (endpoint, resource, field, role, identity) + 1 VIOLATES
     expect(lawHighlight(g, "LAW-404").nodes.size).toBe(0);
   });
 

@@ -1,5 +1,52 @@
 # Progress
 
+## 2026-09-24: Phase: Security Constitution engine ✅
+
+Scope: static, model-level security reasoning only. No runtime testing, requests or scanning. Details in [docs/SECURITY_CONSTITUTION.md](docs/SECURITY_CONSTITUTION.md).
+
+### Done (verified by running it)
+
+| Item | Evidence |
+|---|---|
+| Contracts: `LawCategory` (6 categories), `LawRule` (typed machine rules), `LawScope` (+identities), `Provenance`, `ConfidenceRationale`, `TestStrategy` (`executable: false`), `SecurityConstitution`; `Role.privilegeEvidence` | `src/contracts` |
+| `generateSecurityConstitution(model, config)`: pure and deterministic, with per-category derivation, key-based dedup (merges provenance, scope and signals), confidence rules over evidence signals, deterministic ids | `tests/constitution/constitution.test.ts` (38 tests, all 12 required areas plus demo and legacy) |
+| Permission name matching (resource, operation, own/foreign qualifier), labelled as a heuristic | same suite |
+| Step 2 compatibility: `toLegacyLaws` gives one legacy law per legacy category, in historical order | Demo still plans **22** cases; sample drift test green |
+| Step 1: ad-hoc `buildLaws` removed; the Constitution panel shows id, category, severity, confidence, statement, machine rule, scope, provenance, confidence signals and test strategy; "Highlight scope in graph" drives the Security Twin | `tests/apps/constitution-panel.test.ts` (5 tests); manual check of the production build |
+| Graph uses constitution laws (statement, provenance, confidence score; GOVERNS edges to identities too); external `focusLaw` | graph + app tests updated |
+| Export carries both `constitution` and legacy `laws` | constitution-panel test |
+| `npm run check` | typecheck ✅ lint ✅ **261/261** ✅ build ✅ |
+
+Demo result: 7 laws.
+- **HIGH:** Order ownership, the admin refund restriction, bearer authentication.
+- **MEDIUM:** Invoice and Order data exposure.
+- **LOW:** User object access (no ownership field), User data exposure (PERSONAL only, no ownership).
+
+### Quality review (hostile pass), with fixes
+
+| Severity | Issue found | Fix |
+|---|---|---|
+| P1 | The User object law claimed `ownership:config` provenance and the Order owners, though User has no ownership field (the audit's BUG-08 pattern, fabricated provenance) | The ownership map now applies only to resources with an ownership field. Mutation test confirms the test catches a regression. |
+| P1 | The state-transition law counted `POST /stores/{id}/listings` (create a child) as a Listing transition | A transition endpoint must address the same resource by id. Mutation test confirms the test catches a regression. |
+| P1 | Invoice data exposure said "entitlement undefined" although Invoice is only reachable through `/orders/{id}` | Inherited entitlement, with `relationship:Invoice→Order` provenance and `rule.inheritedFrom` |
+| P1 | Merging deny permissions from several roles kept only the first role in the statement | Denies are grouped before the law is built |
+| P2 | Admin law provenance omitted the denied roles; "X accept…" grammar | Fixed |
+| n/a | Scan for demo vocabulary in `src/constitution`: only in comments | — |
+| n/a | Network check of the production build: only the 6 local requests (page, CSS, bundle, 2 demo samples); no console errors | — |
+
+### Limitations
+
+- Permission-to-endpoint matching is a name heuristic, so those laws are capped at MEDIUM.
+- The ownership map is not typed by resource. It is applied only to owned resources, with an ambiguity note when several exist.
+- Sensitivity is a name heuristic unless an analyst overrides it, so data-exposure laws only reach HIGH with an override.
+- Allowed state transitions are not expressible in OpenAPI, so state-transition laws are at most MEDIUM.
+- Test strategies are specifications and are not executed.
+- The Step 1 bundle grew to 586 KiB (constitution engine + panel).
+
+## 2026-09-24: CI green on GitHub ✅
+
+Run [36009994438](https://github.com/mohitvaish1931/amity-/actions/runs/36009994438) on `99775ec` passed every step (npm ci, typecheck, lint, test, build) after the esbuild fix described below.
+
 ## 2026-09-24: CI foundation ✅ (first GitHub run failed; fix verified locally, awaiting a new run)
 
 Scope: CI and dev tooling only. No application behaviour changed.

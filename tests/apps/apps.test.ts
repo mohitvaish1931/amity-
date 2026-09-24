@@ -18,7 +18,7 @@ describe("Step 1 app (1-security-twin) still works end to end", () => {
     expect(app.alerts).toEqual([]);
     expect(app.$("invCount").textContent).toBe("5 endpoints");
     expect(app.document.querySelectorAll("#discovery tr").length).toBe(6); // header + 5
-    expect(app.document.querySelectorAll("#laws .law").length).toBe(4);
+    expect(app.document.querySelectorAll("#laws details.const-law").length).toBe(7); // constitution laws
     const model = JSON.parse(app.$("out4").textContent!);
     expect(model.version).toBe("part1-v5-typed");
     expect(model.endpoints.map((e: { resource: string }) => e.resource)).toEqual(["User", "Order", "Order", "Invoice", "Refund"]);

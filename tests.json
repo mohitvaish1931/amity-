@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "updated": "2026-09-24",
-  "phase": "ci-foundation",
+  "phase": "security-constitution",
   "commands": {
     "install": {
       "cmd": "npm ci",
@@ -19,8 +19,8 @@
     "test": {
       "cmd": "npm test",
       "result": "pass",
-      "total": 218,
-      "passed": 218,
+      "total": 261,
+      "passed": 261,
       "failed": 0
     },
     "build": {
@@ -35,13 +35,13 @@
     "manualBrowserCheck": {
       "cmd": "node scripts/serve.mjs (after npm run build)",
       "result": "pass",
-      "notes": "Step 1: banner is a policy statement; target label CONFIGURED \"Sandbox target configured / Authorization status unknown\" (also on dashboard); graph 27 nodes / 49 edges; law test paths filled; no console errors. Step 2: demo plan unchanged (22 cases); added two-parameter endpoint -> BOLA/DATA skipped with reason, no planned path contains \"{\", matrix explains; no console errors."
+      "notes": "Constitution panel: 7 laws with statement, machine rule, scope, provenance, confidence signals, test strategy; dashboard 3H/2M/2L; real click on \"Highlight scope in graph\" (LAW-003) focuses the card, scrolls to the graph and highlights exactly the law scope (22 nodes dimmed); network log shows only 6 local requests; no console errors."
     },
     "testCi": {
       "cmd": "npm run test:ci",
       "result": "pass",
-      "total": 218,
-      "passed": 218,
+      "total": 261,
+      "passed": 261,
       "failed": 0,
       "notes": "writes reports/junit.xml; GitHub annotations verified with a throwaway failing test (::error with file/line, exit 1)"
     },
@@ -59,10 +59,22 @@
           "result": "failure",
           "failedStep": "npm ci",
           "cause": "npm 10 (Node 22 bundled) rejected npm-11 lockfile: unmet optional peer esbuild ^0.27||^0.28 of vite 8 (Missing @esbuild/*@0.28.2)"
+        },
+        {
+          "id": 36009994438,
+          "commit": "99775ec",
+          "result": "success",
+          "steps": [
+            "npm ci",
+            "typecheck",
+            "lint",
+            "test",
+            "build"
+          ]
         }
       ],
-      "fix": "esbuild 0.25.12 -> 0.28.2; verified with npx npm@10 ci + npm run check on a clean copy (218/218)",
-      "nextRun": "pending push"
+      "nextRun": "not pushed since 99775ec",
+      "fixCommit": "99775ec (esbuild 0.25.12 -> 0.28.2)"
     }
   },
   "fixtures": {
@@ -332,7 +344,8 @@
         "law highlight",
         "fit/reset/rebuild without errors",
         "arbitrary (non-demo) model"
-      ]
+      ],
+      "notes": "demo now renders 7 constitution laws"
     },
     {
       "file": "tests/paths/fill-path.test.ts",
@@ -396,6 +409,49 @@
         "JUnit report upload + always-on summary",
         "npm run check composition",
         ".gitattributes LF normalization"
+      ]
+    },
+    {
+      "file": "tests/constitution/constitution.test.ts",
+      "area": "Security Constitution engine (pure)",
+      "tests": 38,
+      "status": "pass",
+      "fixtures": [
+        "tests/fixtures/constitution/marketplace.json",
+        "demo spec"
+      ],
+      "covers": [
+        "1 ownership laws",
+        "2 role-restricted laws",
+        "3 authentication laws",
+        "4 data-exposure candidates (incl. inherited entitlement, analyst overrides)",
+        "5 public/optional endpoints",
+        "6 operation-level overrides",
+        "7 unrelated-resource exclusion",
+        "8 provenance resolves to real model/config entities",
+        "9 confidence levels + rationale",
+        "10 duplicate suppression",
+        "11 precise scope",
+        "12 determinism (incl. config order)",
+        "test strategies non-executable; no network code",
+        "demo laws + legacy mapping"
+      ],
+      "mutationChecks": [
+        "applying the ownership map to unowned resources -> caught",
+        "loose transition-endpoint check -> caught"
+      ]
+    },
+    {
+      "file": "tests/apps/constitution-panel.test.ts",
+      "area": "Constitution panel + law explorer (real Step 1 bundle)",
+      "tests": 5,
+      "status": "pass",
+      "covers": [
+        "law list",
+        "rule/scope/provenance/confidence/strategy rendering",
+        "highlight scope in graph",
+        "non-demo model",
+        "export carries constitution + legacy laws"
       ]
     }
   ],

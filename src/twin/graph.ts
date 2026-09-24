@@ -273,16 +273,19 @@ export function buildTwinGraph(input: TwinGraphInput): TwinGraph {
     const scope = law.appliesTo ?? {};
     const hiddenFields = (scope.fields ?? []).filter((f) => !shownFields.has(f)).length;
     const meta: Record<string, MetaValue> = {};
-    for (const k of ["title", "category", "severity", "confidence", "score", "invariant", "source"] as const) {
+    for (const k of ["statement", "category", "severity", "confidence", "invariant"] as const) {
       const v = law[k];
-      if (v !== undefined && v !== null) meta[k] = v as MetaValue;
+      if (v !== undefined && v !== null) meta[k] = v;
     }
+    if (law.confidenceRationale) meta.confidenceScore = law.confidenceRationale.score;
+    if (law.provenance?.length) meta.provenance = law.provenance.map((p) => p.ref);
     if (hiddenFields) meta.fieldsHiddenByFilter = hiddenFields;
     g.addNode({ id: nodeId.law(law.id), type: "law", label: law.id, subtitle: [law.category, law.severity].filter(Boolean).join(" · "), meta });
     const prov = `law scope${law.confidence ? ` (confidence ${law.confidence})` : ""}`;
     for (const ep of scope.endpoints ?? []) g.addEdge(nodeId.law(law.id), nodeId.endpoint(ep), "GOVERNS", prov);
     for (const res of scope.resources ?? []) g.addEdge(nodeId.law(law.id), nodeId.resource(res), "GOVERNS", prov);
     for (const role of scope.roles ?? []) g.addEdge(nodeId.law(law.id), nodeId.role(role), "GOVERNS", prov);
+    for (const identity of scope.identities ?? []) g.addEdge(nodeId.law(law.id), nodeId.identity(identity), "GOVERNS", prov);
     for (const f of scope.fields ?? []) {
       const dot = f.indexOf(".");
       if (dot > 0) g.addEdge(nodeId.law(law.id), nodeId.field(f.slice(0, dot), f.slice(dot + 1)), "GOVERNS", prov);
