@@ -17,3 +17,15 @@ details.const-law[hidden] { display: none; }
 .explorer label { margin: 0 0 4px; }
 .explorer .grow { flex: 1 1 220px; }
 .explorer .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+@media print {
+  body * { visibility: hidden; }
+  #printHeader, #printHeader *, #laws, #laws * { visibility: visible; }
+  #printHeader { position: absolute; left: 0; top: 0; display: block !important; margin-bottom: 20px; }
+  #laws { position: absolute; left: 0; top: 150px; width: 100%; }
+  details.const-law > summary { display: none; }
+  details.const-law .const-body { display: block; }
+  details.const-law { border: 1px solid #ccc; margin-bottom: 15px; padding: 10px; border-radius: 4px; break-inside: avoid; }
+  details.const-law[hidden] { display: none !important; }
+}
+

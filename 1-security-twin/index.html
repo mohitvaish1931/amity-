@@ -21,7 +21,7 @@
 <label for="swaggerText">OpenAPI 3.x / Swagger 2.0 — upload a JSON or YAML spec, or paste below</label>
 <button type="button" class="drop" id="uploadBtn">📄 Upload spec (.json / .yaml / .yml)</button><input type="file" id="fileInput" accept=".json,.yaml,.yml" hidden aria-label="OpenAPI spec file">
 <textarea id="swaggerText" placeholder='Paste OpenAPI/Swagger JSON or YAML here, or click "Load Demo Swagger"'></textarea>
-<div class="row"><button class="ghost" type="button" id="demoBtn">Load Demo Swagger + Config</button><span class="sub">Demo spec + demo configuration (identities, permissions, ownership). Replace with your own to prove data-driven.</span></div>
+<div class="row"><button class="ghost" type="button" id="demoBtn">Load Demo Swagger + Config</button><button class="ghost" type="button" id="clearDataBtn">Clear saved data</button><span class="sub">Demo spec + demo configuration. Replace with your own to prove data-driven.</span></div>
 <label for="baseUrl">Sandbox Base URL</label><input type="text" id="baseUrl" placeholder="https://your-authorized-sandbox.example (Load Demo fills it from the spec's servers)">
 <div class="row" style="margin-top:8px"><button class="ghost" type="button" id="testBtn">Test Connection (safe GET)</button><span class="sub" id="sandboxStatus" role="status" aria-live="polite">Not tested.</span></div>
 <label for="identitiesEditor">Configuration — identities (JSON array)</label><textarea id="identitiesEditor" style="min-height:70px" placeholder='[{"name":"...","role":"...","id":"..."}] — or Load Demo'></textarea>
@@ -59,7 +59,16 @@
   <div><label for="lawSeverity">Severity</label><select id="lawSeverity" disabled><option value="">All severities</option></select></div>
   <div><label for="lawConfidence">Confidence</label><select id="lawConfidence" disabled><option value="">All confidence levels</option></select></div>
   <div class="grow"><label for="lawSearch">Search</label><input type="search" id="lawSearch" placeholder="law id, endpoint, resource, field, role…" disabled></div>
-  <div class="actions"><button class="ghost" type="button" id="lawExportJson" disabled>Export shown laws (JSON)</button><button class="ghost" type="button" id="lawExportMd" disabled>Export shown laws (Markdown)</button></div>
+  <div class="actions">
+    <button class="ghost" type="button" id="lawExportJson" disabled>Export shown laws (JSON)</button>
+    <button class="ghost" type="button" id="lawExportMd" disabled>Export shown laws (Markdown)</button>
+    <button class="ghost" type="button" id="lawPrintPdf" disabled>Print to PDF</button>
+  </div>
+</div>
+<div id="printHeader" style="display:none">
+  <h1>Security Constitution Report</h1>
+  <p><strong>Specification-derived</strong>: This report was automatically generated from the OpenAPI specification and configuration.</p>
+  <div id="printSummary"></div>
 </div>
 <p class="sub" id="lawCount" role="status" aria-live="polite"></p>
 <div id="laws">—</div></div>

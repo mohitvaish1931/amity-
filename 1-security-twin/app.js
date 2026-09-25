@@ -17,6 +17,38 @@ const $ = (id) => document.getElementById(id);
 const LEVELS = ["PUBLIC", "PERSONAL", "INTERNAL", "SENSITIVE"];
 let STATE = { specText:"", apiModel:null, constitution:null, baseUrl:"", endpoints:[], resources:{}, laws:[], twin:null, model:null, warnings:[], specInfo:{}, sandbox:{status:"idle"}, inferences:[], overrides:{}, dashboard:null,
   config:{ identities:[], permissions:{}, ownership:{} } };
+function saveLocalState() {
+  const data = {
+    swaggerText: $("swaggerText").value,
+    baseUrl: $("baseUrl").value,
+    identitiesEditor: $("identitiesEditor").value,
+    permissionsEditor: $("permissionsEditor").value,
+    ownershipEditor: $("ownershipEditor").value,
+    overrides: STATE.overrides
+  };
+  localStorage.setItem("sentinel_x_part1_state", JSON.stringify(data));
+}
+function restoreLocalState() {
+  try {
+    const raw = localStorage.getItem("sentinel_x_part1_state");
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    if(data.swaggerText) $("swaggerText").value = data.swaggerText;
+    if(data.baseUrl) $("baseUrl").value = data.baseUrl;
+    if(data.identitiesEditor) $("identitiesEditor").value = data.identitiesEditor;
+    if(data.permissionsEditor) $("permissionsEditor").value = data.permissionsEditor;
+    if(data.ownershipEditor) $("ownershipEditor").value = data.ownershipEditor;
+    if(data.overrides) STATE.overrides = data.overrides;
+    return !!data.swaggerText;
+  } catch(e) {
+    console.warn("Failed to restore state", e);
+    return false;
+  }
+}
+function clearLocalState() {
+  localStorage.removeItem("sentinel_x_part1_state");
+  location.reload();
+}
 
 // ---------- config-driven helpers (no hardcoded roles/names) ----------
 function cfgIdentities(){ return STATE.config.identities||[]; }
@@ -347,7 +379,7 @@ function renderConstitution(){
 }
 // ---------- Constitution Explorer: filter options come from the laws present; exports contain what is shown ----------
 const LAW_FILTERS = [["lawCategory","category",l=>CATEGORY_LABEL[l]||l],["lawSeverity","severity",l=>l],["lawConfidence","confidence",l=>l]];
-const LAW_CONTROLS = ["lawCategory","lawSeverity","lawConfidence","lawSearch","lawExportJson","lawExportMd"];
+const LAW_CONTROLS = ["lawCategory","lawSeverity","lawConfidence","lawSearch","lawExportJson","lawExportMd","lawPrintPdf"];
 function renderLawFilters(){
   const laws = STATE.constitution ? STATE.constitution.laws : [];
   for(const [id,key,label] of LAW_FILTERS){
@@ -377,6 +409,21 @@ function exportLaws(format){
   const ctx = { specTitle: STATE.specInfo.title||null, specVersion: STATE.specInfo.version||null, generatedAt: new Date().toISOString(), filter: currentLawFilter() };
   if(format==="json") download("security-constitution.json", JSON.stringify(exportConstitutionJson(c, shownLaws(), ctx),null,2));
   else download("security-constitution.md", exportConstitutionMarkdown(c, shownLaws(), ctx), "text/markdown");
+}
+function printLaws() {
+  const c = STATE.constitution; if(!c) return;
+  const laws = shownLaws();
+  setHtml($("printSummary"), html`<p><strong>${laws.length} Laws</strong> included in this report (Filtered from total ${c.laws.length}).</p>
+  <ul>
+    <li>High confidence: ${laws.filter(l=>l.confidence==="HIGH").length}</li>
+    <li>Medium confidence: ${laws.filter(l=>l.confidence==="MEDIUM").length}</li>
+    <li>Low confidence: ${laws.filter(l=>l.confidence==="LOW").length}</li>
+  </ul>
+  <p><strong>Scope</strong>: Endpoints, resources, and rules derived from the provided API specification and access configuration.</p>
+  <p><strong>Limitations</strong>: Machine-inferred laws may lack complete business context. MEDIUM and LOW confidence laws require human review or runtime validation to verify.</p>`);
+  
+  // Give DOM a frame to update before print dialog blocks it
+  setTimeout(() => window.print(), 50);
 }
 function focusLaw(id){
   document.querySelectorAll("#laws details.const-law").forEach(d=>d.classList.toggle("is-focused", d.dataset.law===id));
@@ -429,6 +476,7 @@ function build(){
   try{ STATE.config = parseConfigEditors(); }catch(e){ showStatus($("buildStatus"), "error", `Invalid configuration: ${e.message}`); return; }
   STATE.specText = txt;
   rebuild();
+  saveLocalState();
   if(STATE.constitution) showStatus($("buildStatus"), "success", builtSummary());
 }
 /** One line describing what the last build produced, for the status area. */
@@ -492,6 +540,12 @@ window.addEventListener("DOMContentLoaded", ()=>{
     if(STATE.constitution) showStatus($("applyStatus"), "success", `Configuration applied. ${builtSummary()}`);
   };
   $("demoBtn").onclick = loadDemo;
+  if($("clearDataBtn")) $("clearDataBtn").onclick = clearLocalState;
+  
+  ["swaggerText", "baseUrl", "identitiesEditor", "permissionsEditor", "ownershipEditor"].forEach(id => {
+    $(id).addEventListener("input", saveLocalState);
+  });
+
   $("baseUrl").addEventListener("input", ()=>{
     renderTargetAuth();
     if(STATE.dashboard){ STATE.dashboard = buildDashboard(); renderDashboard(); }
@@ -510,9 +564,18 @@ window.addEventListener("DOMContentLoaded", ()=>{
   $("lawSearch").addEventListener("input", applyLawFilter);
   $("lawExportJson").onclick=()=>exportLaws("json");
   $("lawExportMd").onclick=()=>exportLaws("md");
+  if($("lawPrintPdf")) $("lawPrintPdf").onclick = printLaws;
   $("dl4").onclick=()=>download("testable-security-model.json",$("out4").textContent);
   $("copy4").onclick=async()=>{
     try{ await copyText($("out4").textContent); showStatus($("exportStatus"), "success", "Testable Security Model copied. Paste it into Part 2."); }
     catch(e){ showStatus($("exportStatus"), "error", `Copy failed (${e.message}). Use Download JSON instead.`); }
   };
+  
+  // Restore state and auto-build if possible
+  const restored = restoreLocalState();
+  if (restored) {
+    setTimeout(() => {
+      if ($("swaggerText").value.trim() !== "") build();
+    }, 50);
+  }
 });
