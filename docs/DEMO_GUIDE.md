@@ -26,7 +26,9 @@ npm run test:e2e
 4. **Inference & Confidence**: each claim lists its evidence signals (✅/❌). INF-03 is MEDIUM until an analyst confirms a sensitivity classification. Change a field in the **Data Sensitivity** table and apply to raise it.
 5. **Security Twin graph**: click a resource node to see its relationships, laws and provenance.
 6. **Security Constitution**: filter by category, severity or confidence, or search (e.g. `customerId`). Open a law to see its machine rule, scope, provenance, confidence signals and test strategy. **Highlight scope in graph** zooms the graph to exactly that law's scope. **Export shown laws** as JSON or Markdown; the export says it is specification-derived.
-7. **Testable Security Model**: **Download JSON** for Part 2.
+7. **Report: print / save as PDF**: a professional report (executive summary, constitution, law details, remediation guidance, limitations) for the laws currently shown. Choose "Save as PDF" in the print dialog.
+8. **Remember** (optional): tick *Remember the spec and configuration in this browser*, reload the page, and the inputs come back. **Clear saved data** forgets them.
+9. **Testable Security Model**: **Download JSON** for Part 2.
 
 ## Part 2: Test Lab (http://127.0.0.1:8000/2-test-lab/)
 

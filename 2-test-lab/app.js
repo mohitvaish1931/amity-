@@ -8,10 +8,23 @@ import { html, joinHtml, setHtml } from "../src/ui/safe-html";
 import { copyText, fetchText, showStatus } from "../src/ui/status";
 import { PathParameterError, fillPath, lastPathParam, pathParamNames } from "../src/paths/index";
 import { assessTargetHost, findTarget, registerTarget, resolveRequestUrl } from "../src/target/policy";
+import { validateTestableModel } from "../src/testlab/model";
+// import removed for unused variables
 const $ = (id) => document.getElementById(id);
+// Documented constants (see docs/TEST_LAB.md). None of them is a result or a score.
+/** AUTHN law: anonymous probes are generated for at most this many protected endpoints; the rest are listed as a planner warning. */
+const AUTHN_PROBE_CAP = 15;
+/** Anonymous probes fill every path parameter with this placeholder: the request must be denied before the object is looked up. */
+const ANON_PLACEHOLDER_ID = "1";
+/** Pause between cases in RUN ALL so the timeline stays readable. Not a measured or simulated latency. */
+const RUN_PACING_MS = 120;
+/** Fixed pause before a mock case "responds", so its state is visible. Mock results report no timing. */
+const MOCK_STEP_MS = 40;
 let S = { model:null, tests:[], results:{}, findings:[], running:false, sel:null, execMode:"mock", mockMode:"vulnerable", sandboxUrl:"",
   auth:{ scheme:"bearer", apiKeyName:"X-API-Key", cookieName:"session", creds:{} }, cookieAck:false,
-  targets:[], llm:{ endpoint:"", key:"", model:"", enabled:false }, llmIdeas:[] };
+  targets:[], llm:{ endpoint:"", key:"", model:"", enabled:false }, llmIdeas:[],
+  /** What the current results were produced against: {mode, target} captured when the run started. */
+  runContext:null };
 
 function log(m){ const c=$("console"); const t=new Date().toLocaleTimeString(); c.appendChild(document.createTextNode(`\n[${t}] ${m}`)); c.scrollTop=c.scrollHeight; }
 function isAuthorized(url){ return !!findTarget(S.targets, url); }
@@ -53,13 +66,18 @@ function baseIdentity(){ const ids=S.model.testIdentities||[]; const br=(S.model
 function adminIdentity(){ const ar=adminRole(); if(!ar) return null; return (S.model.testIdentities||[]).find(i=>i.role===ar)||null; }
 
 // ---------- import ----------
+class ModelError extends Error { constructor(message, details){ super(message); this.details=details; } }
+/** Validates and installs a model. Returns where the target URL came from: "user", "model" or "none". */
 function loadModel(obj){
-  if(!obj||!Array.isArray(obj.endpoints)||!Array.isArray(obj.laws)) throw new Error("Not a testable-security-model (need endpoints[] + laws[]).");
-  S.model=obj; S.tests=[]; S.results={}; S.findings=[]; S.sel=null;
+  const check=validateTestableModel(obj);
+  if(!check.ok) throw new ModelError("this is not a valid testable-security-model.json.", check.errors);
+  S.model=obj; S.tests=[]; S.results={}; S.findings=[]; S.sel=null; S.runContext=null; S.modelWarnings=check.warnings;
   // The model only suggests a target: a URL the user already entered is never replaced (audit BUG-11).
-  if(!$("sandboxUrl").value.trim()) $("sandboxUrl").value=obj.sandboxBaseUrl||"";
+  let urlSource="user";
+  if(!$("sandboxUrl").value.trim()){ $("sandboxUrl").value=obj.sandboxBaseUrl||""; urlSource=obj.sandboxBaseUrl?"model":"none"; }
   S.sandboxUrl=$("sandboxUrl").value.trim();
-  $("modelInfo").textContent=`${obj.version||"?"} · ${obj.endpoints.length} endpoints · ${obj.laws.length} laws · ${(obj.testIdentities||[]).length} identities`;
+  $("modelInfo").textContent=`${obj.version||"unversioned"} · ${obj.endpoints.length} endpoints · ${obj.laws.length} laws · ${(obj.testIdentities||[]).length} identities`;
+  return urlSource;
 }
 
 // ---------- planner ----------
@@ -91,12 +109,13 @@ function planTests(){
   const mk=(o)=>{ const h=o.hypothesis; return {...o, hypothesisSource:(h&&h.source)||"heuristic", hypothesis:(h&&h.text)||h}; };
   for(const law of M.laws){
     const cat=law.category||"POLICY";
-    if(cat==="BOLA"){
+    if(cat==="BOLA"&&!base) S.planWarnings.push(`${law.id} BOLA: the model has no test identity, so no object-authorization case was planned.`);
+    if(cat==="BOLA"&&base){
       for(const idGet of idGets){
         const mine=ownEntries.find(o=>base&&o.ownerId===base.id)||ownEntries[0];
         const foreign=ownEntries.find(o=>mine&&o.ownerId!==mine.ownerId);
-        const of=(M.twin.resources[idGet.resource]||{}).ownershipField||"ownership field";
-        let P; try{ P={ mine:mine&&objectPath(idGet.path,mine.objectId), foreign:foreign&&objectPath(idGet.path,foreign.objectId), anon:objectPath(idGet.path,(mine||{objectId:"1"}).objectId) }; }catch(e){ skip(cat,idGet,e); continue; }
+        const of=(((M.twin||{}).resources||{})[idGet.resource]||{}).ownershipField||"ownership field";
+        let P; try{ P={ mine:mine&&objectPath(idGet.path,mine.objectId), foreign:foreign&&objectPath(idGet.path,foreign.objectId), anon:objectPath(idGet.path,(mine||{objectId:ANON_PLACEHOLDER_ID}).objectId) }; }catch(e){ skip(cat,idGet,e); continue; }
         if(mine) tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"BOLA_BASE",priority:1,
           hypothesis:H("BOLA_BASE",{actor:base.id,obj:mine.objectId,ep:`${idGet.method} ${idGet.path}`}),
           given:`authenticated as ${base.id} (${nameOf(base.id)})`,whenText:`${idGet.method} ${P.mine} (own)`,expectText:"ALLOW",
@@ -110,7 +129,7 @@ function planTests(){
         tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"AUTHN",priority:2,
           hypothesis:H("AUTHN",{ep:`${idGet.method} ${idGet.path}`}),given:"unauthenticated",whenText:`${idGet.method} ${P.anon}`,expectText:"DENY 401",
           target:{method:idGet.method,pathTemplate:idGet.path,path:P.anon,resource:idGet.resource},
-          identityId:null,mutation:{type:"auth-strip",from:base?base.id:"identity",to:"anonymous",reason:"no credential sent"},expectedDeny:true,objectId:(mine||{objectId:"1"}).objectId}));
+          identityId:null,mutation:{type:"auth-strip",from:base?base.id:"identity",to:"anonymous",reason:"no credential sent"},expectedDeny:true,objectId:(mine||{objectId:ANON_PLACEHOLDER_ID}).objectId}));
         if(mine&&foreign) tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"SEQUENCE",priority:2,
           hypothesis:H("SEQUENCE",{actor:base.id,ep:`${idGet.method} ${idGet.path}`}),given:`authenticated as ${base.id}, then context switch`,whenText:`GET own ${mine.objectId} → reuse foreign ${foreign.objectId}`,expectText:"step1 ALLOW, step2 DENY",
           target:{method:idGet.method,pathTemplate:idGet.path,path:P.foreign,resource:idGet.resource},
@@ -146,11 +165,11 @@ function planTests(){
       }
     }
     if(cat==="AUTHN"){
-      prot.slice(0,15).forEach(e=>{ tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"AUTHN",priority:2,
+      prot.slice(0,AUTHN_PROBE_CAP).forEach(e=>{ tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"AUTHN",priority:2,
         hypothesis:H("AUTHN",{ep:`${e.method} ${e.path}`}),given:"no token",whenText:`${e.method} ${e.path}`,expectText:"DENY 401",
-        target:{method:e.method,pathTemplate:e.path,path:placeholderPath(e.path,"1"),resource:e.resource},
+        target:{method:e.method,pathTemplate:e.path,path:placeholderPath(e.path,ANON_PLACEHOLDER_ID),resource:e.resource},
         identityId:null,mutation:{type:"auth-strip",from:"identity",to:"anonymous",reason:"no credential sent"},expectedDeny:true})); });
-      if(prot.length>15) S.planWarnings.push(`AUTHN expanded to first 15 of ${prot.length} protected endpoints.`);
+      if(prot.length>AUTHN_PROBE_CAP) S.planWarnings.push(`AUTHN expanded to first ${AUTHN_PROBE_CAP} of ${prot.length} protected endpoints.`);
     }
     if(cat==="ROLE"){
       if(adminEps.length&&base) adminEps.forEach(adminEp=>{ let adminPath; try{ adminPath=fillPath(adminEp.path,{}); }catch(e){ skip(cat,adminEp,e); return; } tests.push(mk({id:tid(),lawId:law.id,category:cat,kind:"ADMIN",priority:2,
@@ -179,7 +198,7 @@ function mockBody(resource, objectId){
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 async function mockRequest(test, overridePath){
   const t0=performance.now();
-  await sleep(60+Math.random()*120);
+  await sleep(MOCK_STEP_MS);
   const path=overridePath||test.target.path;
   const ident=(S.model.testIdentities||[]).find(i=>i.id===test.identityId);
   const role=ident?ident.role:null;
@@ -220,7 +239,7 @@ async function liveRequest(test){
   const opts={method:test.target.method,headers,signal:ctl.signal,mode:"cors",redirect:"error"};
   if(isCookieScheme()) opts.credentials=test.identityId?"include":"omit"; // jar only for identity tests; anonymous stays anonymous
   else opts.credentials="omit";
-  if(test.target.method!=="GET") opts.body=JSON.stringify({id:test.objectId||"1"});
+  if(test.target.method!=="GET") opts.body=JSON.stringify({id:test.objectId||ANON_PLACEHOLDER_ID});
   const r=await fetch(url,opts); clearTimeout(to);
   const ms=Math.round(performance.now()-t0);
   const txt=await r.text();
@@ -345,7 +364,7 @@ async function runAll(){
         log(`${t.id} = ${S.results[t.id].status}`);
       }catch(e){ S.results[t.id]={status:"ERROR",reason:String(e.message||e),test:t}; log(`${t.id} ERROR ${e.message}`); }
       renderAll();
-      await sleep(120);
+      await sleep(RUN_PACING_MS);
     }
     buildFindings();
     renderAll();

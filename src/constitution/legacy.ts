@@ -10,6 +10,7 @@ export interface LegacyLaw {
   title: string;
   source: string;
   confidence: Confidence;
+  /** Share of the primary law's confidence signals that are present (0-100); never a fixed number per level. */
   score: number;
   reason: string;
   invariant: string;
@@ -19,7 +20,6 @@ export interface LegacyLaw {
 }
 
 export const LEGACY_ORDER: readonly LegacyLawCategory[] = ["BOLA", "ADMIN", "DATA", "AUTHN", "ROLE", "POLICY"];
-const SCORE: Record<Confidence, number> = { HIGH: 90, MEDIUM: 60, LOW: 30 };
 const SEVERITY_RANK: Record<Severity, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 
 export function legacyCategoryOf(law: SecurityLaw): LegacyLawCategory {
@@ -58,7 +58,7 @@ export function toLegacyLaws(constitution: SecurityConstitution): LegacyLaw[] {
       title: others ? `${primary.statement} (+${others} related law${others > 1 ? "s" : ""}: ${laws.slice(1).map((l) => l.id).join(", ")})` : primary.statement,
       source: [...new Set(laws.flatMap((l) => l.provenance.map((p) => p.ref)))].slice(0, 8).join("; "),
       confidence: primary.confidence,
-      score: SCORE[primary.confidence],
+      score: primary.confidenceRationale.score,
       reason: primary.confidenceRationale.rule,
       invariant: primary.invariant,
       appliesTo: {

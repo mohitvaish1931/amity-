@@ -126,3 +126,15 @@ Step 1's Constitution panel has an explorer (`src/constitution/explore.ts`):
 - **Filters** by category, severity and confidence. The options are generated from the laws actually present, with counts. There is also a text search over id, statement, invariant, scope entries and provenance references. Non-matching law cards are hidden, not re-rendered, so open cards stay open. Filters survive a rebuild when the value still exists.
 - **Export shown laws** as JSON (`sentinel-x-constitution-export-v1`) or Markdown. Exports contain exactly the laws currently shown, record the filter and the total, and state `basis: "specification"` with the disclaimer that no test was executed and no law is a confirmed vulnerability.
 - Spec-supplied text is escaped in Markdown, so resource or field names cannot inject links, HTML or table cells.
+
+## Printable report (PDF)
+
+**Report: print / save as PDF** renders `renderConstitutionReport` (`src/constitution/report.ts`) for the laws currently shown and opens the browser's print dialog; choosing "Save as PDF" produces the PDF (no extra dependency). On screen the report stays hidden; print CSS shows only the report, in light colours for paper. Sections:
+
+1. **Executive summary**: counts from the model and configuration, laws by severity and confidence, "verify first" (high severity with high-confidence evidence), and the readiness checklist.
+2. **Security Constitution**: one table row per law.
+3. **Law details**: statement, machine rule, scope, confidence rationale and signals, provenance, and the test strategy (specification only).
+4. **Remediation guidance**: generic guidance per category present (`REMEDIATION`), naming the laws it applies to.
+5. **Limitations**: the engine's heuristics (always listed), model notes and parser warnings.
+
+The header states the target, that authorization is not verified, the generation time and the filter. Every part is labelled specification-derived; the report never uses the word CONFIRMED. All spec-supplied text is escaped.

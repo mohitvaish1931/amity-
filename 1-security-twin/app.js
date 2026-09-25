@@ -3,13 +3,14 @@
 // inferences and laws on top of that model and renders them. All rendering goes through html``/setHtml,
 // which escape every interpolated value.
 import { analyzeSpecText } from "../src/model/index";
-import { exportConstitutionJson, exportConstitutionMarkdown, filterLaws, generateSecurityConstitution, toLegacyLaws } from "../src/constitution/index";
+import { exportConstitutionJson, exportConstitutionMarkdown, filterLaws, generateSecurityConstitution, renderConstitutionReport, toLegacyLaws } from "../src/constitution/index";
 import { fillPath, lastPathParam } from "../src/paths/index";
 import { deriveTargetAuthorization } from "../src/target/authorization";
 import { assessTargetHost } from "../src/target/policy";
 import "../src/ui/theme.css";
 import { html, joinHtml, setHtml } from "../src/ui/safe-html";
 import { copyText, fetchText, showStatus } from "../src/ui/status";
+import { createWorkspaceStore } from "../src/ui/persist";
 import { createLazyTwinView } from "../src/twin/lazy";
 import "../src/twin/styles";
 
@@ -17,39 +18,6 @@ const $ = (id) => document.getElementById(id);
 const LEVELS = ["PUBLIC", "PERSONAL", "INTERNAL", "SENSITIVE"];
 let STATE = { specText:"", apiModel:null, constitution:null, baseUrl:"", endpoints:[], resources:{}, laws:[], twin:null, model:null, warnings:[], specInfo:{}, sandbox:{status:"idle"}, inferences:[], overrides:{}, dashboard:null,
   config:{ identities:[], permissions:{}, ownership:{} } };
-function saveLocalState() {
-  const data = {
-    swaggerText: $("swaggerText").value,
-    baseUrl: $("baseUrl").value,
-    identitiesEditor: $("identitiesEditor").value,
-    permissionsEditor: $("permissionsEditor").value,
-    ownershipEditor: $("ownershipEditor").value,
-    overrides: STATE.overrides
-  };
-  localStorage.setItem("sentinel_x_part1_state", JSON.stringify(data));
-}
-function restoreLocalState() {
-  try {
-    const raw = localStorage.getItem("sentinel_x_part1_state");
-    if(!raw) return false;
-    const data = JSON.parse(raw);
-    if(data.swaggerText) $("swaggerText").value = data.swaggerText;
-    if(data.baseUrl) $("baseUrl").value = data.baseUrl;
-    if(data.identitiesEditor) $("identitiesEditor").value = data.identitiesEditor;
-    if(data.permissionsEditor) $("permissionsEditor").value = data.permissionsEditor;
-    if(data.ownershipEditor) $("ownershipEditor").value = data.ownershipEditor;
-    if(data.overrides) STATE.overrides = data.overrides;
-    return !!data.swaggerText;
-  } catch(e) {
-    console.warn("Failed to restore state", e);
-    return false;
-  }
-}
-function clearLocalState() {
-  localStorage.removeItem("sentinel_x_part1_state");
-  location.reload();
-}
-
 // ---------- config-driven helpers (no hardcoded roles/names) ----------
 function cfgIdentities(){ return STATE.config.identities||[]; }
 function cfgPermissions(){ return STATE.config.permissions||{}; }
@@ -410,20 +378,20 @@ function exportLaws(format){
   if(format==="json") download("security-constitution.json", JSON.stringify(exportConstitutionJson(c, shownLaws(), ctx),null,2));
   else download("security-constitution.md", exportConstitutionMarkdown(c, shownLaws(), ctx), "text/markdown");
 }
-function printLaws() {
-  const c = STATE.constitution; if(!c) return;
-  const laws = shownLaws();
-  setHtml($("printSummary"), html`<p><strong>${laws.length} Laws</strong> included in this report (Filtered from total ${c.laws.length}).</p>
-  <ul>
-    <li>High confidence: ${laws.filter(l=>l.confidence==="HIGH").length}</li>
-    <li>Medium confidence: ${laws.filter(l=>l.confidence==="MEDIUM").length}</li>
-    <li>Low confidence: ${laws.filter(l=>l.confidence==="LOW").length}</li>
-  </ul>
-  <p><strong>Scope</strong>: Endpoints, resources, and rules derived from the provided API specification and access configuration.</p>
-  <p><strong>Limitations</strong>: Machine-inferred laws may lack complete business context. MEDIUM and LOW confidence laws require human review or runtime validation to verify.</p>`);
-  
-  // Give DOM a frame to update before print dialog blocks it
-  setTimeout(() => window.print(), 50);
+/** Everything the printable report needs, taken from the current model, configuration and explorer filter. */
+function reportInput(){
+  const c = STATE.constitution, d = STATE.dashboard, a = targetAuthorization();
+  return { specTitle: STATE.specInfo.title||null, specVersion: STATE.specInfo.version||null, generatedAt: new Date().toISOString(),
+    target: { label: a.label, detail: a.detail },
+    summary: { endpoints: d.endpoints, resources: d.resources, fields: d.fields, sensitiveFields: d.sens, identities: d.identities, roles: d.roles },
+    readiness: d.checks, laws: shownLaws(), totalLaws: c.laws.length, filter: currentLawFilter(), notes: c.notes, warnings: STATE.warnings };
+}
+function printReport(){
+  if(!STATE.constitution||!STATE.dashboard){ showStatus($("reportStatus"), "empty", "Build the Security Twin first: the report is generated from the constitution."); return; }
+  setHtml($("printReport"), renderConstitutionReport(reportInput()));
+  document.body.classList.add("printing");
+  showStatus($("reportStatus"), "success", `Report ready (${shownLaws().length} of ${STATE.constitution.laws.length} laws). Choose "Save as PDF" as the printer to get a PDF.`);
+  try{ window.print(); }catch(e){ showStatus($("reportStatus"), "error", `Printing is not available here (${e.message}).`); }
 }
 function focusLaw(id){
   document.querySelectorAll("#laws details.const-law").forEach(d=>d.classList.toggle("is-focused", d.dataset.law===id));
@@ -466,6 +434,7 @@ function rebuild(){
   STATE.laws = buildLegacyLaws(STATE.constitution);
   STATE.dashboard = buildDashboard();
   renderAll();
+  persistWorkspace();
 }
 function build(){
   const txt = $("swaggerText").value.trim();
@@ -476,7 +445,6 @@ function build(){
   try{ STATE.config = parseConfigEditors(); }catch(e){ showStatus($("buildStatus"), "error", `Invalid configuration: ${e.message}`); return; }
   STATE.specText = txt;
   rebuild();
-  saveLocalState();
   if(STATE.constitution) showStatus($("buildStatus"), "success", builtSummary());
 }
 /** One line describing what the last build produced, for the status area. */
@@ -530,6 +498,35 @@ async function loadDemo(){
   }
 }
 
+// ---------- opt-in persistence (this browser only; spec, configuration, URL and overrides; never credentials) ----------
+const workspaceStore = createWorkspaceStore(()=>window.localStorage);
+function currentWorkspace(){
+  return { specText:$("swaggerText").value, identities:$("identitiesEditor").value, permissions:$("permissionsEditor").value,
+    ownership:$("ownershipEditor").value, baseUrl:$("baseUrl").value.trim(), overrides:{ ...STATE.overrides } };
+}
+function persistWorkspace(){
+  if(!$("rememberChk").checked) return;
+  const r = workspaceStore.save(currentWorkspace(), new Date().toISOString());
+  if(r.ok) showStatus($("persistStatus"), "success", `Saved in this browser at ${r.savedAt}.`);
+  else showStatus($("persistStatus"), "error", `Not saved: ${r.message}.`);
+}
+function restoreWorkspace(){
+  if(!workspaceStore.remembered()) return;
+  $("rememberChk").checked = true;
+  const r = workspaceStore.load();
+  if(r.ok){
+    const d = r.data;
+    $("swaggerText").value = d.specText; $("identitiesEditor").value = d.identities; $("permissionsEditor").value = d.permissions;
+    $("ownershipEditor").value = d.ownership; $("baseUrl").value = d.baseUrl; STATE.overrides = { ...d.overrides };
+    showStatus($("persistStatus"), "success", `Restored the spec and configuration saved in this browser at ${d.savedAt}. Next: BUILD SECURITY TWIN.`);
+  } else if(r.reason==="corrupt"){
+    workspaceStore.clear(); $("rememberChk").checked = false;
+    showStatus($("persistStatus"), "error", "The saved data could not be read and was removed.");
+  } else if(r.reason==="unavailable"){
+    showStatus($("persistStatus"), "info", "Browser storage is not available here; nothing was restored.");
+  }
+}
+
 window.addEventListener("DOMContentLoaded", ()=>{
   $("buildBtn").onclick = build;
   $("testBtn").onclick = testSandbox;
@@ -540,17 +537,17 @@ window.addEventListener("DOMContentLoaded", ()=>{
     if(STATE.constitution) showStatus($("applyStatus"), "success", `Configuration applied. ${builtSummary()}`);
   };
   $("demoBtn").onclick = loadDemo;
-  if($("clearDataBtn")) $("clearDataBtn").onclick = clearLocalState;
-  
-  ["swaggerText", "baseUrl", "identitiesEditor", "permissionsEditor", "ownershipEditor"].forEach(id => {
-    $(id).addEventListener("input", saveLocalState);
-  });
-
   $("baseUrl").addEventListener("input", ()=>{
     renderTargetAuth();
     if(STATE.dashboard){ STATE.dashboard = buildDashboard(); renderDashboard(); }
   });
+  restoreWorkspace();
   renderTargetAuth();
+  $("rememberChk").addEventListener("change", e=>{
+    if(e.target.checked) persistWorkspace();
+    else { workspaceStore.clear(); showStatus($("persistStatus"), "info", "Saved data removed from this browser; nothing will be remembered."); }
+  });
+  $("clearSaved").onclick = ()=>{ workspaceStore.clear(); $("rememberChk").checked = false; showStatus($("persistStatus"), "success", "Saved data removed from this browser."); };
   $("uploadBtn").onclick = ()=>$("fileInput").click();
   $("fileInput").addEventListener("change", e=>{
     const f=e.target.files[0]; if(!f) return;
@@ -564,18 +561,11 @@ window.addEventListener("DOMContentLoaded", ()=>{
   $("lawSearch").addEventListener("input", applyLawFilter);
   $("lawExportJson").onclick=()=>exportLaws("json");
   $("lawExportMd").onclick=()=>exportLaws("md");
-  if($("lawPrintPdf")) $("lawPrintPdf").onclick = printLaws;
+  $("lawPrintPdf").onclick = printReport;
+  window.addEventListener("afterprint", ()=>document.body.classList.remove("printing"));
   $("dl4").onclick=()=>download("testable-security-model.json",$("out4").textContent);
   $("copy4").onclick=async()=>{
     try{ await copyText($("out4").textContent); showStatus($("exportStatus"), "success", "Testable Security Model copied. Paste it into Part 2."); }
     catch(e){ showStatus($("exportStatus"), "error", `Copy failed (${e.message}). Use Download JSON instead.`); }
   };
-  
-  // Restore state and auto-build if possible
-  const restored = restoreLocalState();
-  if (restored) {
-    setTimeout(() => {
-      if ($("swaggerText").value.trim() !== "") build();
-    }, 50);
-  }
 });

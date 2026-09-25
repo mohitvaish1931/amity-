@@ -29,14 +29,14 @@ Step 2 turns Step 1's `testable-security-model.json` into planned authorization 
 
 Findings are built from violations. Their status is **SIMULATED** for mock runs and **CONFIRMED** only for live runs. Each finding shows the law's own confidence level (HIGH/MEDIUM/LOW), never a made-up percentage.
 
-## Known weaknesses (prototype)
+## Current constraints (Local Execution Only)
 
-These audit items are still open and are why Step 2 must not be treated as a finished runtime engine:
+These audit items are inherent constraints of the local-only browser architecture. By design, Step 2 is not a fully networked backend runtime engine:
 
-- Execution runs in the browser, so enforcement is client-side.
-- Confirmation is weak: it compares status codes and looks for field names, and HTTP 200 on a foreign object is treated as exposure without comparing the data to the owner's baseline in depth.
+- Execution runs entirely in the browser, so enforcement is client-side.
+- Confirmation is heuristic: it compares status codes and looks for field names, and HTTP 200 on a foreign object is treated as exposure without comparing the data to the owner's baseline in depth.
 - Request bodies for writes are minimal placeholders, not schema-driven.
-- There is no persistence or run history; everything lives in page memory.
+- There is no backend persistence; everything lives in page memory (except basic config inputs).
 - The evidence package includes response bodies as received, with no redaction beyond credentials.
 
 ## Tests

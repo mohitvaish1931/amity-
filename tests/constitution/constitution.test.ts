@@ -355,7 +355,14 @@ describe("demo spec (1-security-twin samples)", () => {
       ["LAW-004", "DATA", ["LAW-004", "LAW-005", "LAW-006"]],
       ["LAW-007", "AUTHN", ["LAW-007"]],
     ]);
-    expect(legacy[0]).toMatchObject({ confidence: "HIGH", score: 90 });
+    expect(legacy[0]).toMatchObject({ confidence: "HIGH" });
+  });
+
+  it("takes each legacy score from the primary law's signals, not from a fixed number per confidence level", () => {
+    for (const l of toLegacyLaws(demo)) {
+      const primary = demo.laws.find((x) => x.id === l.constitutionLawIds[0])!;
+      expect(l.score).toBe(primary.confidenceRationale.score);
+    }
   });
 
   it("maps every category to a legacy category", () => {

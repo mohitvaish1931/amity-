@@ -21,4 +21,5 @@ export interface LoadedApp {
   close: () => void;
 }
 
-export function loadApp(appDir: "1-security-twin" | "2-test-lab"): Promise<LoadedApp>;
+/** `beforeRun(window)` runs before the app script, e.g. to pre-fill localStorage as a previous visit would have. */
+export function loadApp(appDir: "1-security-twin" | "2-test-lab", opts?: { beforeRun?: (window: LoadedApp["window"]) => void }): Promise<LoadedApp>;

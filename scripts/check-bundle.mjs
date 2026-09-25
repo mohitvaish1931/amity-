@@ -5,7 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { ROOT } from "./app-harness.mjs";
 
-/** Budgets in KiB (minified, uncompressed). Measured 2026-09-25: Step 1 entry 186.0, Step 2 48.6. */
+/** Budgets in KiB (minified, uncompressed). Measured 2026-09-25: Step 1 entry 197.5 (with report + persistence), Step 2 48.6. */
 export const BUDGETS = { "1-security-twin/app.js": 256, "2-test-lab/app.js": 96 };
 
 const DIST = path.join(ROOT, "dist");

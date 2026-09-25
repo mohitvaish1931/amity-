@@ -22,7 +22,8 @@ What could go wrong when someone uses Sentinel X, and what the code does about i
 | T7 | Silent failures hide problems | Inline loading/success/empty/error states with Retry; a clipboard failure is reported. | – |
 | T8 | Local dev server exposure or crash | Binds 127.0.0.1; serves only `dist/`; 400 for undecodable paths (no crash), 403 outside the root. | – |
 | T9 | Supply chain | Exact dependency versions, `npm ci` from the lockfile, CI actions pinned to SHAs, read-only CI permissions, no secrets in CI; `npm audit`: 0 vulnerabilities (2026-09-25). | New advisories after that date. |
+| T10 | Data left in the browser | Persistence is opt-in, Step 1 only, declared fields only (never credentials), validated on load, and cleared by unticking or **Clear saved data**. Step 2 persists nothing. | Anyone with access to the same browser profile can read a remembered spec and configuration. |
 
 ## Out of scope
 
-Server-side execution, multi-user access control and persistence. None of these exist yet.
+Server-side execution, server-side persistence and multi-user access control. None of these exist; the only storage is the opt-in browser storage in T10.

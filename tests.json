@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "updated": "2026-09-25",
-  "phase": "product-hardening",
+  "phase": "pdf-report-and-persistence",
   "commands": {
     "install": {
       "cmd": "npm ci",
@@ -14,21 +14,22 @@
     },
     "lint": {
       "cmd": "npm run lint",
-      "result": "pass"
+      "result": "fail",
+      "notes": "3 no-undef errors, all in sandbox-api/server.js (unreviewed leftover of an interrupted attempt, left in place at the user request); passes with --ignore-pattern sandbox-api/"
     },
     "test": {
       "cmd": "npm test",
       "result": "pass",
-      "total": 370,
-      "passed": 370,
+      "total": 391,
+      "passed": 391,
       "failed": 0,
-      "notes": "31 files"
+      "notes": "34 files"
     },
     "build": {
       "cmd": "npm run build",
       "result": "pass",
       "outputs": [
-        "dist/1-security-twin/app.js (186.0 KiB, ES module entry)",
+        "dist/1-security-twin/app.js (197.5 KiB, ES module entry)",
         "dist/1-security-twin/chunks/mount-*.js (413.4 KiB, loaded on demand)",
         "dist/1-security-twin/chunks/chunk-*.js (0.7 KiB, shared)",
         "dist/1-security-twin/app.css (26.4 KiB)",
@@ -45,15 +46,15 @@
     "testCi": {
       "cmd": "npm run test:ci",
       "result": "pass",
-      "total": 370,
-      "passed": 370,
+      "total": 391,
+      "passed": 391,
       "failed": 0,
       "notes": "writes reports/junit.xml; GitHub annotations verified with a throwaway failing test (::error with file/line, exit 1)"
     },
     "check": {
       "cmd": "npm run check",
-      "result": "pass",
-      "notes": "typecheck -> lint -> test -> build -> check:bundle"
+      "result": "fail",
+      "notes": "fails at lint because of sandbox-api/server.js only; typecheck, test, build and bundle budget pass when run individually"
     },
     "githubActions": {
       "workflow": ".github/workflows/ci.yml",
@@ -125,15 +126,17 @@
         "Google Chrome 153.0.8010.53 (channel chrome)",
         "Microsoft Edge 153.0.4234.48 (channel msedge)"
       ],
-      "total": 42,
-      "passed": 42,
+      "total": 46,
+      "passed": 46,
       "failed": 0,
       "flaky": 0,
       "server": "scripts/e2e-server.mjs on 127.0.0.1:4178 (build + serve, one process); port free and no leftover process after runs",
       "tests": [
         "Step 1: demo flow incl. lazy graph chunk (not requested before BUILD, once after) and initial fit inside the canvas; empty, non-demo and invalid models (inline error, no dialog)",
         "Step 2: plan + keyboard selection; mock run labelled SIMULATED (never CONFIRMED, no %); refused targets (public host, metadata IP, invalid URL); live run blocked for an unregistered URL (no requests); live run against a registered loopback target with requests aborted in-browser (origin-contained, ERROR, no findings)",
-        "Layout: no horizontal scroll at 390/1280/1366/1920 px in populated states; visible focus outline; 3-column Step 2 workspace on wide screens, stacked below"
+        "Layout: no horizontal scroll at 390/1280/1366/1920 px in populated states; visible focus outline; 3-column Step 2 workspace on wide screens, stacked below",
+        "Report: print media shows only the report; the browser renders a multi-page PDF (%PDF header, >1 page)",
+        "Persistence: remembered inputs survive a reload; Clear saved data forgets them; nothing stored before opt-in"
       ],
       "ciMode": {
         "cmd": "CI=1 E2E_SKIP_BUILD=1 PW_CHANNELS=chrome npx playwright test",
@@ -149,7 +152,9 @@
       "files": [
         "e2e/step1.spec.ts",
         "e2e/step2.spec.ts",
-        "e2e/layout.spec.ts"
+        "e2e/layout.spec.ts",
+        "e2e/report.spec.ts",
+        "e2e/persistence.spec.ts"
       ]
     },
     "bundleBudget": {
@@ -512,8 +517,8 @@
     },
     {
       "file": "tests/apps/constitution-explorer.test.ts",
-      "area": "explorer filters from data, filtering, persistence across rebuild, exports of shown laws",
-      "tests": 5,
+      "area": "explorer filters from data, filtering, persistence across rebuild, exports of shown laws; printable report opens print and matches the shown laws; print failure reported",
+      "tests": 7,
       "status": "pass"
     },
     {
@@ -620,6 +625,24 @@
       "file": "tests/ci/static-path.test.ts",
       "area": "static server containment, 400 on undecodable paths",
       "tests": 3,
+      "status": "pass"
+    },
+    {
+      "file": "tests/constitution/report.test.ts",
+      "area": "printable report: sections, laws, remediation per category present, filter, limitations, punctuation, escaping",
+      "tests": 8,
+      "status": "pass"
+    },
+    {
+      "file": "tests/ui/persist.test.ts",
+      "area": "workspace store: round trip, opt-in flag, clear, corrupt/tampered data, size cap, quota, missing/blocked storage, declared fields only",
+      "tests": 6,
+      "status": "pass"
+    },
+    {
+      "file": "tests/apps/persistence.test.ts",
+      "area": "Step 1 opt-in persistence: nothing without opt-in, restore incl. overrides, clear, corrupt data removed; Step 2 stores nothing",
+      "tests": 5,
       "status": "pass"
     }
   ],

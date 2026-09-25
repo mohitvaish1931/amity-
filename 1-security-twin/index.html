@@ -21,12 +21,14 @@
 <label for="swaggerText">OpenAPI 3.x / Swagger 2.0 — upload a JSON or YAML spec, or paste below</label>
 <button type="button" class="drop" id="uploadBtn">📄 Upload spec (.json / .yaml / .yml)</button><input type="file" id="fileInput" accept=".json,.yaml,.yml" hidden aria-label="OpenAPI spec file">
 <textarea id="swaggerText" placeholder='Paste OpenAPI/Swagger JSON or YAML here, or click "Load Demo Swagger"'></textarea>
-<div class="row"><button class="ghost" type="button" id="demoBtn">Load Demo Swagger + Config</button><button class="ghost" type="button" id="clearDataBtn">Clear saved data</button><span class="sub">Demo spec + demo configuration. Replace with your own to prove data-driven.</span></div>
+<div class="row"><button class="ghost" type="button" id="demoBtn">Load Demo Swagger + Config</button><span class="sub">Demo spec + demo configuration. Replace with your own to prove data-driven.</span></div>
 <label for="baseUrl">Sandbox Base URL</label><input type="text" id="baseUrl" placeholder="https://your-authorized-sandbox.example (Load Demo fills it from the spec's servers)">
 <div class="row" style="margin-top:8px"><button class="ghost" type="button" id="testBtn">Test Connection (safe GET)</button><span class="sub" id="sandboxStatus" role="status" aria-live="polite">Not tested.</span></div>
 <label for="identitiesEditor">Configuration — identities (JSON array)</label><textarea id="identitiesEditor" style="min-height:70px" placeholder='[{"name":"...","role":"...","id":"..."}] — or Load Demo'></textarea>
 <label for="permissionsEditor">Configuration — permissions (JSON: role → action → bool)</label><textarea id="permissionsEditor" style="min-height:70px" placeholder='{"RoleA":{"Action":true}} — or Load Demo'></textarea>
 <label for="ownershipEditor">Configuration — ownership (JSON: objectId → ownerId)</label><textarea id="ownershipEditor" style="min-height:60px" placeholder='{"obj_1":"owner_id_1"} — or Load Demo'></textarea>
+<div class="row persist-row"><label style="margin:0" for="rememberChk"><input type="checkbox" id="rememberChk" style="width:auto"> Remember the spec and configuration in this browser (never credentials)</label><button class="ghost" type="button" id="clearSaved">Clear saved data</button></div>
+<div class="op-status" id="persistStatus" role="status" aria-live="polite"></div>
 <p class="field-label" id="identityChipsLabel">Configured identities</p>
 <div class="row" id="identityChips" aria-labelledby="identityChipsLabel"><span class="sub">Load Demo or paste config.</span></div>
 <div class="row" id="targetAuthState" data-state="UNKNOWN"><span class="sub">Authorization status unknown.</span></div>
@@ -62,15 +64,11 @@
   <div class="actions">
     <button class="ghost" type="button" id="lawExportJson" disabled>Export shown laws (JSON)</button>
     <button class="ghost" type="button" id="lawExportMd" disabled>Export shown laws (Markdown)</button>
-    <button class="ghost" type="button" id="lawPrintPdf" disabled>Print to PDF</button>
+    <button class="ghost" type="button" id="lawPrintPdf" disabled>Report: print / save as PDF</button>
   </div>
 </div>
-<div id="printHeader" style="display:none">
-  <h1>Security Constitution Report</h1>
-  <p><strong>Specification-derived</strong>: This report was automatically generated from the OpenAPI specification and configuration.</p>
-  <div id="printSummary"></div>
-</div>
 <p class="sub" id="lawCount" role="status" aria-live="polite"></p>
+<div class="op-status" id="reportStatus" role="status" aria-live="polite"></div>
 <div id="laws">—</div></div>
 
 <div class="card"><h2>🧪 Testable Security Laws → Part 2 input</h2><p class="sub">Part 2 contract: one law per legacy category (BOLA / ADMIN / DATA / AUTHN / ROLE / POLICY) summarizing the constitution laws above, expanded to Given/When/Expect cases.</p><div id="lawTests">—</div>
@@ -85,6 +83,8 @@
 <p class="sub">Part 2 starts here: PART 1 Security Laws ▼ → PART 2 Test Lab. Save the Testable Security Model JSON.</p>
 </div>
 </div>
+<!-- Printable report: filled on demand and shown only when printing (browser "Save as PDF"). -->
+<section id="printReport" class="print-report" aria-label="Printable Security Constitution report" hidden></section>
 <script type="module" src="app.js"></script>
 </body>
 </html>

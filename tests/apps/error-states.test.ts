@@ -97,7 +97,7 @@ describe("Step 2 states", () => {
     expect(status(app, "modelStatus")).toMatchObject({ kind: "empty" });
     app.setValue("modelText", '{"endpoints": []}');
     app.click("planBtn");
-    expect(status(app, "modelStatus").text).toMatch(/Invalid model: Not a testable-security-model/);
+    expect(status(app, "modelStatus").text).toMatch(/this is not a valid testable-security-model/);
     app.setValue("modelText", "{");
     app.click("planBtn");
     expect(status(app, "modelStatus")).toMatchObject({ kind: "error" });

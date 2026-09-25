@@ -18,14 +18,26 @@ details.const-law[hidden] { display: none; }
 .explorer .grow { flex: 1 1 220px; }
 .explorer .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* Printable report (src/constitution/report.ts): hidden on screen, the only thing printed while body.printing is set. */
+.print-report[hidden] { display: none; }
 @media print {
-  body * { visibility: hidden; }
-  #printHeader, #printHeader *, #laws, #laws * { visibility: visible; }
-  #printHeader { position: absolute; left: 0; top: 0; display: block !important; margin-bottom: 20px; }
-  #laws { position: absolute; left: 0; top: 150px; width: 100%; }
-  details.const-law > summary { display: none; }
-  details.const-law .const-body { display: block; }
-  details.const-law { border: 1px solid #ccc; margin-bottom: 15px; padding: 10px; border-radius: 4px; break-inside: avoid; }
-  details.const-law[hidden] { display: none !important; }
+  @page { margin: 16mm; }
+  body.printing { background: #fff; color: #111; }
+  body.printing > :not(#printReport) { display: none !important; }
+  body.printing #printReport { display: block !important; }
 }
-
+.report { font: 11pt/1.45 system-ui, "Segoe UI", Roboto, Arial, sans-serif; color: #111; background: #fff; max-width: 190mm; }
+.report h1 { font-size: 20pt; margin: 2px 0 6px; }
+.report h2 { font-size: 14pt; margin: 18px 0 6px; padding-bottom: 3px; border-bottom: 1px solid #999; break-after: avoid; }
+.report h3 { font-size: 11.5pt; margin: 12px 0 4px; break-after: avoid; }
+.report-head .report-kicker { text-transform: uppercase; letter-spacing: .08em; font-size: 8.5pt; color: #555; margin: 0; }
+/* the theme's `header p` rule (muted, for the page header) must not reach the report's own header */
+.report-head p { color: #111; margin: 4px 0; font-size: 11pt; }
+.report-basis { border-left: 3px solid #1d4ed8; background: #eef2ff; padding: 6px 10px; margin: 8px 0; }
+.report-muted { color: #555; font-size: 9.5pt; }
+.report table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 6px 0; }
+.report th, .report td { border: 1px solid #bbb; padding: 4px 6px; text-align: left; vertical-align: top; color: #111; background: #fff; text-transform: none; letter-spacing: 0; font-weight: normal; }
+.report thead th, .report th[scope="row"] { background: #f1f5f9; font-weight: 600; white-space: nowrap; }
+.report code { font-family: ui-monospace, Consolas, monospace; font-size: 9pt; background: #f1f5f9; border: 1px solid #ddd; color: #111; }
+.report-law { break-inside: avoid; border-top: 1px solid #ddd; padding-top: 6px; }
+.report ul { margin: 4px 0; padding-left: 18px; }

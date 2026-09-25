@@ -22,6 +22,7 @@ Node.js ≥ 22.12 (`.nvmrc`: 22). Install with `npm ci`.
 - **Rendering**: only through `html```/`setHtml` (`src/ui/safe-html.ts`). ESLint bans `innerHTML` in the apps, and the CSP bans inline scripts and handlers, so wire events in JS.
 - **Operation feedback**: use `showStatus` (`src/ui/status.ts`), not `alert()`. Give every failure a message and, when retrying makes sense, a Retry.
 - **Styles**: shared tokens and components in `src/ui/theme.css`; app-specific rules in `<app>/styles.css`. Colour states (green/red/amber) only for results.
+- **Browser storage**: only through `createWorkspaceStore` (`src/ui/persist.ts`), opt-in, never credentials. App tests can pre-fill storage with `loadApp(app, { beforeRun: (w) => w.localStorage.setItem(...) })`.
 - **Targets**: anything that sends a request to a user-supplied URL must go through `src/target/policy.ts` (`assessTargetHost` / `registerTarget` / `resolveRequestUrl`).
 
 ## Tests

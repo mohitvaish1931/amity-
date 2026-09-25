@@ -115,3 +115,38 @@ describe("Constitution Explorer", () => {
     for (const l of laws.filter((x) => x.category !== cat)) expect(md).not.toContain(`## ${l.id}: `);
   });
 });
+
+describe("Printable report (Save as PDF)", () => {
+  it("renders the report for exactly the shown laws, marks the page for printing and opens the print dialog", async () => {
+    app = await built();
+    let printed = 0;
+    app.window.print = () => {
+      printed++;
+    };
+    const laws = JSON.parse(app.$("out3").textContent!).laws as { id: string; category: string }[];
+    select(app, "lawCategory", laws[0]!.category);
+    app.click("lawPrintPdf");
+    expect(printed).toBe(1);
+    expect(app.document.body.classList.contains("printing")).toBe(true);
+    const report = app.$("printReport");
+    expect(report.hasAttribute("hidden")).toBe(true); // hidden on screen; print CSS shows it
+    const inReport = [...report.querySelectorAll(".report-law")].map((d) => (d as HTMLElement).dataset.law);
+    expect(inReport).toEqual(visible(app));
+    expect(report.querySelector('[data-testid="report-basis"]')!.textContent).toMatch(/Specification-derived/);
+    expect(report.textContent).toContain(JSON.parse(app.$("swaggerText").value).info.title);
+    expect(report.textContent).toMatch(/Readiness for testing: 6\/6 checks/);
+    expect(app.$("reportStatus").textContent).toMatch(/Report ready \(\d+ of 7 laws\)\. Choose "Save as PDF"/);
+    app.window.dispatchEvent(new app.window.Event("afterprint"));
+    expect(app.document.body.classList.contains("printing")).toBe(false);
+  });
+
+  it("reports when printing is not available instead of failing silently", async () => {
+    app = await built();
+    app.window.print = () => {
+      throw new Error("blocked");
+    };
+    app.click("lawPrintPdf");
+    expect(app.$("reportStatus").dataset.status).toBe("error");
+    expect(app.$("reportStatus").textContent).toMatch(/Printing is not available here \(blocked\)/);
+  });
+});

@@ -52,7 +52,7 @@ npm start
 
 This builds both apps into `dist/` and serves them at http://127.0.0.1:8000/:
 
-- Step 1: http://127.0.0.1:8000/1-security-twin/ → **Load Demo Swagger + Config**, then **BUILD SECURITY TWIN**, then download `testable-security-model.json`.
+- Step 1: http://127.0.0.1:8000/1-security-twin/ → **Load Demo Swagger + Config**, then **BUILD SECURITY TWIN**, then download `testable-security-model.json`. **Report: print / save as PDF** produces the Security Constitution report; *Remember…* keeps your inputs in this browser (opt-in).
 - Step 2: http://127.0.0.1:8000/2-test-lab/ → **Load Demo Model** (or paste the JSON from step 1), then **PLAN TESTS**, then **RUN ALL** (Mock mode: results are SIMULATED).
 
 The apps import TypeScript from `src/`, so they must be built. Opening the source `index.html` directly no longer works.
@@ -75,10 +75,11 @@ npm run test:e2e    # Playwright end-to-end tests (builds + serves dist/ itself)
 npm run test:e2e
 ```
 
-This builds the production bundles and serves `dist/` on `127.0.0.1:4178` (`scripts/e2e-server.mjs`, a single Node process that Playwright starts and stops), then drives both apps in real browsers (21 tests per browser):
+This builds the production bundles and serves `dist/` on `127.0.0.1:4178` (`scripts/e2e-server.mjs`, a single Node process that Playwright starts and stops), then drives both apps in real browsers (23 tests per browser):
 - Step 1: the demo flow (build the twin with the graph lazy-loaded only on BUILD and fitted into view, click a resource node, open a law, highlight its scope), plus empty, non-demo and invalid models;
 - Step 2: plan, keyboard selection, a mock run labelled SIMULATED, refused targets (public host, metadata IP, invalid URL), a live run blocked for an unregistered URL, and a live run against a registered loopback target whose requests are aborted in the browser (shown as ERROR, no findings);
-- layout: no horizontal scroll at 390, 1280, 1366 and 1920 px wide, visible keyboard focus, the three-column Step 2 workspace on wide screens.
+- layout: no horizontal scroll at 390, 1280, 1366 and 1920 px wide, visible keyboard focus, the three-column Step 2 workspace on wide screens;
+- report: print media shows only the report and the browser renders a multi-page PDF; persistence: remembered inputs survive a reload and Clear saved data forgets them.
 
 Expected node, edge and highlight counts are computed from the model libraries, never hardcoded. The tests assert there are no console errors (including CSP violations) and that only the app's own local assets are requested.
 
@@ -123,7 +124,7 @@ OpenAPI 3.0 / 3.1 and Swagger 2.0, as JSON or YAML: local `$ref` everywhere (sch
 
 ## Performance
 
-The Step 1 page loads 186 KiB of JS (down from 589 KiB). The Security Twin graph (React + React Flow, 413 KiB) is a separate chunk fetched only when the twin is first rendered, with a loading state and Retry if it fails. `scripts/check-bundle.mjs` fails the build check if the entry grows past 256 KiB or the graph stops being lazy.
+The Step 1 page loads 197.5 KiB of JS (down from 589 KiB). The Security Twin graph (React + React Flow, 413 KiB) is a separate chunk fetched only when the twin is first rendered, with a loading state and Retry if it fails. `scripts/check-bundle.mjs` fails the build check if the entry grows past 256 KiB or the graph stops being lazy.
 
 ## Path parameters and target state
 
@@ -135,7 +136,7 @@ The Step 1 page loads 186 KiB of JS (down from 589 KiB). The Security Twin graph
 
 - External (remote/file) `$ref` values are reported, not fetched.
 - Resource and sensitivity inference are heuristics with recorded evidence, not ground truth.
-- Step 2's execution and confirmation logic is still the prototype: it runs in the browser, confirmation is weak, and there is no persistence or run history. Mock results are clearly SIMULATED and CONFIRMED is reserved for live runs, but there is no backend and no controlled sandbox API bundled. See [docs/TEST_LAB.md](docs/TEST_LAB.md).
+- Step 2's execution and confirmation logic runs completely locally within the browser. Mock results are clearly SIMULATED, and while CONFIRMED is reserved for live runs against an authorized local sandbox, there is no backend API runner included. This is an explicit design choice to preserve the static, self-contained architecture of the tool. See [docs/TEST_LAB.md](docs/TEST_LAB.md).
 
 ## Docs
 

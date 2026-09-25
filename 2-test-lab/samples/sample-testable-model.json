@@ -1305,7 +1305,7 @@
       "title": "Customer may access only Order objects they own (ownership field Order.customerId). (+1 related law: LAW-002)",
       "source": "ownership:config; endpoint:GET /orders/{id}; endpoint:GET /orders/{id}/invoice; permission:Customer.View Foreign Order=false; permission:Customer.View Own Order=true; role:Customer; schema:Order.customerId; endpoint:GET /users/{id}",
       "confidence": "HIGH",
-      "score": 90,
+      "score": 100,
       "reason": "HIGH: ownership field + objects of ≥2 owners + authentication required. MEDIUM: ownership field. LOW: otherwise.",
       "invariant": "∀ caller c ∈ roles{Customer}, Order o via {EP-002, EP-004}: ALLOW(c, o) ⇒ o.customerId = c",
       "appliesTo": {
@@ -1358,7 +1358,7 @@
       "title": "Only Administrator may invoke POST /admin/refund; Customer must be denied.",
       "source": "endpoint:POST /admin/refund; permission:Administrator.Refund=true; permission:Customer.Admin Refund=false; role:Administrator; role:Customer",
       "confidence": "HIGH",
-      "score": 90,
+      "score": 100,
       "reason": "HIGH: privileged role + other roles + explicit deny permission. MEDIUM: privileged role + other roles. LOW: otherwise.",
       "invariant": "∀ caller c, request to {EP-005}: ALLOW(c) ⇒ role(c) ∈ {Administrator}; role(c) ∈ {Customer} ⇒ DENY(c)",
       "appliesTo": {
@@ -1402,7 +1402,7 @@
       "title": "Invoice responses must not expose paymentMetadata to callers who do not own the parent Order (ownership field Order.customerId). (+2 related laws: LAW-005, LAW-006)",
       "source": "endpoint:GET /orders/{id}/invoice; relationship:Invoice→Order; schema:Order.customerId; sensitivity:Invoice.paymentMetadata=SENSITIVE; endpoint:GET /orders/{id}; sensitivity:Order.address=PERSONAL; sensitivity:Order.customerName=PERSONAL; sensitivity:Order.paymentMetadata=SENSITIVE",
       "confidence": "MEDIUM",
-      "score": 60,
+      "score": 80,
       "reason": "HIGH: analyst-confirmed sensitivity + ownership field. MEDIUM: ownership field or SENSITIVE-level fields. LOW: PERSONAL-only fields without ownership.",
       "invariant": "∀ caller c, Invoice o returned by {EP-004}: Order(o).customerId ≠ c ⇒ fields(response) ∩ {paymentMetadata} = ∅",
       "appliesTo": {
@@ -1452,7 +1452,7 @@
       "title": "Endpoints secured by bearerAuth must reject requests without valid credentials.",
       "source": "endpoint:GET /orders/{id}; endpoint:GET /orders/{id}/invoice; endpoint:GET /users/{id}; endpoint:POST /admin/refund; endpoint:POST /orders; security:bearerAuth",
       "confidence": "HIGH",
-      "score": 90,
+      "score": 100,
       "reason": "HIGH: declared requirement with declared, typed schemes. MEDIUM: declared requirement but a scheme is undeclared or untyped.",
       "invariant": "∀ request r to {EP-001, EP-002, EP-003, EP-004, EP-005}: ¬authenticated(r, bearerAuth) ⇒ DENY(r)",
       "appliesTo": {

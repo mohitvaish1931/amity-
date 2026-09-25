@@ -64,7 +64,8 @@ function installLayoutStubs(w) {
   w.SVGElement.prototype.getBBox = () => ({ x: 0, y: 0, width: 0, height: 0 });
 }
 
-export async function loadApp(appDir) {
+/** `beforeRun(window)` runs before the app script, e.g. to pre-fill localStorage as a previous visit would have. */
+export async function loadApp(appDir, { beforeRun } = {}) {
   const { js, css } = await bundleApp(appDir);
   const page = readFileSync(path.join(ROOT, appDir, "index.html"), "utf8").replace(/<script[^>]*src="app\.js"[^>]*><\/script>/, "");
   const dom = new JSDOM(page, { runScripts: "dangerously", url: `http://sentinel.test/${appDir}/`, pretendToBeVisual: true });
@@ -90,6 +91,7 @@ export async function loadApp(appDir) {
     const text = readFileSync(file, "utf8");
     return { ok: true, status: 200, text: async () => text, json: async () => JSON.parse(text) };
   };
+  if (beforeRun) beforeRun(w);
   w.eval(js);
   w.dispatchEvent(new w.Event("DOMContentLoaded"));
 

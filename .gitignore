@@ -8,3 +8,7 @@ reports/
 test-results/
 playwright-report/
 blob-report/
+
+# local tooling and captures: never committed
+.claude/
+*-screenshot.png
