@@ -57,7 +57,7 @@ A law is a hypothesis to verify, not a finding. See [SECURITY_CONSTITUTION.md](S
 
 ## 5. Findings (contract)
 
-`src/contracts` defines `Finding.state` as `SUSPECTED | OBSERVED | CONFIRMED`, and marks `TestResult`/`Evidence` with `simulated`. The intended rule is that simulated results can never back a CONFIRMED finding. **The step 2 prototype does not follow this contract yet.** Its mock results are still labelled CONFIRMED. See progress.md.
+`src/contracts` defines `Finding.state` as `SUSPECTED | OBSERVED | CONFIRMED`, and marks `TestResult`/`Evidence` with `simulated`. Simulated results can never back a CONFIRMED finding. The Step 2 prototype now labels every mock result and finding **SIMULATED** (badges, evidence package `status`/`simulated`, and the reasoning trail), shows the law's own confidence level instead of a percentage, and reserves CONFIRMED for live runs against a registered target. Its execution and confirmation logic is otherwise still the prototype (see docs/TEST_LAB.md).
 
 ## 6. Application safety rules
 
@@ -68,4 +68,8 @@ A law is a hypothesis to verify, not a finding. See [SECURITY_CONSTITUTION.md](S
 | XSS regressions | `tests/apps/xss.test.ts` loads the real bundles with crafted spec, config and model content and asserts: no injected elements, no `on*` attributes, no attribute breakout, and no handler execution on focus. The same suite fails 8 of 10 tests against the pre-hardening code. |
 | Credentials never serialized into markup | Step 2 sets credential inputs through the DOM `value` property. A test checks the secret is absent from `innerHTML` after a re-render. |
 | Parser robustness | Malformed or hostile documents return errors or warnings (tests cover invalid JSON/YAML, wrong roots, bad versions, broken/external/circular refs). YAML alias expansion is capped. |
-| Local server | `scripts/serve.mjs` binds to 127.0.0.1, blocks path traversal and sends `X-Content-Type-Options: nosniff`. |
+| Local server | `scripts/serve.mjs` binds to 127.0.0.1, sends `X-Content-Type-Options: nosniff`, and resolves paths with `scripts/static-path.mjs`: 400 for undecodable paths (previously a malformed escape crashed the server), 403 outside `dist/` (previously a prefix-sharing sibling such as `dist-old/` was reachable). |
+| Target scope | `src/target/policy.ts`: only loopback, private-network and reserved-name hosts can be registered, and every live request must stay on the registered origin and base path. Redirects are refused. See docs/SANDBOX.md. |
+| Content-Security-Policy | Both pages: `script-src 'self'`, no inline scripts or `on*` attributes (the last inline handler was removed), `object-src 'none'`, `base-uri 'none'`, `form-action 'none'`. A test checks it. |
+| Honest status | No blocking `alert()`: operations report loading/success/empty/error inline (`src/ui/status.ts`). A failed demo load offers Retry, and a denied clipboard is reported instead of claiming the copy worked. |
+| Markdown export | `exportConstitutionMarkdown` escapes spec-supplied text (HTML entities for `<`, `>` and `&`, backslash escapes for Markdown syntax), and code spans use a fence longer than any backtick run. |

@@ -4,7 +4,8 @@ import path from "node:path";
 import { ROOT, bundleApp } from "./app-harness.mjs";
 
 const APPS = [
-  { dir: "1-security-twin", title: "Step 1 — Security Twin", assets: ["index.html", "styles.css", "samples"] },
+  // split: ES modules with code splitting (the Security Twin graph loads on demand; index.html uses type="module").
+  { dir: "1-security-twin", title: "Step 1 — Security Twin", assets: ["index.html", "styles.css", "samples"], split: true },
   { dir: "2-test-lab", title: "Step 2 — Test Lab", assets: ["index.html", "styles.css", "samples"] },
 ];
 const DIST = path.join(ROOT, "dist");
@@ -14,9 +15,15 @@ for (const app of APPS) {
   const out = path.join(DIST, app.dir);
   mkdirSync(out, { recursive: true });
   for (const asset of app.assets) cpSync(path.join(ROOT, app.dir, asset), path.join(out, asset), { recursive: true });
-  const { js, css } = await bundleApp(app.dir, { minify: true });
+  const { js, css, chunks } = await bundleApp(app.dir, { minify: true, split: !!app.split });
   writeFileSync(path.join(out, "app.js"), js);
   console.log(`built dist/${app.dir}/app.js (${(js.length / 1024).toFixed(1)} KiB)`);
+  for (const [rel, code] of Object.entries(chunks)) {
+    mkdirSync(path.dirname(path.join(out, rel)), { recursive: true });
+    writeFileSync(path.join(out, rel), code);
+    const onDemand = js.includes(`import("./${rel}")`);
+    console.log(`built dist/${app.dir}/${rel} (${(code.length / 1024).toFixed(1)} KiB, ${onDemand ? "loaded on demand" : "loaded with the page"})`);
+  }
   if (css) {
     writeFileSync(path.join(out, "app.css"), css);
     console.log(`built dist/${app.dir}/app.css (${(css.length / 1024).toFixed(1)} KiB)`);

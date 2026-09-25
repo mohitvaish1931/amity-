@@ -49,6 +49,15 @@ describe("GitHub Actions workflow", () => {
     }
   });
 
+  it("checks the bundle budget right after a successful build", () => {
+    const order = ["build", "budget", "pwinstall"];
+    expect(steps.filter((s) => s.id && order.includes(s.id)).map((s) => s.id)).toEqual(order);
+    const budget = steps.find((s) => s.id === "budget")!;
+    expect(budget.run).toBe("npm run check:bundle");
+    expect(budget.if).toBe("${{ !cancelled() && steps.build.outcome == 'success' }}");
+    expect(steps.find((s) => s.name === "Summary")!.run).toContain("| Bundle budget |");
+  });
+
   it("runs Playwright E2E on the CI production build, after installing Chromium with its system dependencies", () => {
     const order = ["build", "pwinstall", "e2e"];
     expect(steps.filter((s) => s.id && order.includes(s.id)).map((s) => s.id)).toEqual(order);
@@ -109,8 +118,9 @@ describe("GitHub Actions workflow", () => {
 });
 
 describe("package scripts", () => {
-  it("npm run check chains the same four stages as CI, without duplicating their commands", () => {
-    expect(pkg.scripts.check).toBe("npm run typecheck && npm run lint && npm run test && npm run build");
+  it("npm run check chains the same stages as CI, without duplicating their commands", () => {
+    expect(pkg.scripts.check).toBe("npm run typecheck && npm run lint && npm run test && npm run build && npm run check:bundle");
+    expect(pkg.scripts["check:bundle"]).toBe("node scripts/check-bundle.mjs");
     expect(pkg.scripts["test:ci"]).toMatch(/^vitest run /);
     expect(pkg.scripts.test).toBe("vitest run");
   });

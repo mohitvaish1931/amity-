@@ -2,7 +2,10 @@ import type { DOMWindow } from "jsdom";
 
 export const ROOT: string;
 
-export function bundleApp(appDir: string, opts?: { minify?: boolean; sourcemap?: boolean }): Promise<{ js: string; css: string }>;
+export function bundleApp(
+  appDir: string,
+  opts?: { minify?: boolean; sourcemap?: boolean; split?: boolean },
+): Promise<{ js: string; css: string; chunks: Record<string, string> }>;
 
 export interface LoadedApp {
   window: DOMWindow & { __xss?: unknown };

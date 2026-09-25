@@ -1,6 +1,6 @@
 # Architecture
 
-Status as of the Security Constitution phase (2026-09-24). This describes what exists in the repository today.
+Status as of the product-hardening phase (2026-09-25). This describes what exists in the repository today.
 
 ## Layers
 
@@ -29,11 +29,16 @@ Status as of the Security Constitution phase (2026-09-24). This describes what e
             ▼                                                                              │
    src/twin/graph.ts       buildTwinGraph  → TwinNode[] / TwinEdge[] (pure, provenance)     │
    src/twin/layout.ts      layoutTwinGraph → positions (pure, deterministic)               │
+   src/twin/lazy.ts        loads the graph code on first use (code-split chunk)              │
    src/twin/*.tsx          React Flow island mounted into #twinGraph                       │
                                                                                             │
-   2-test-lab/app.js       planner (unchanged prototype logic) ◄───────────────────────────┘
+   2-test-lab/app.js       planner + prototype executor ◄──────────────────────────────────┘
+                           live requests only to a registered target (src/target/policy.ts)
 
+   src/constitution/explore.ts  filter + JSON/Markdown export of laws (Constitution Explorer)
    src/ui/safe-html.ts     html`` / setHtml / joinHtml, used by every render function in both apps
+   src/ui/status.ts        loading / success / empty / error / retry states (no alert())
+   src/ui/theme.css        shared restrained theme, bundled into each app's app.css
    src/contracts           types shared by all of the above
 ```
 
@@ -54,17 +59,25 @@ Status as of the Security Constitution phase (2026-09-24). This describes what e
 | `src/twin/graph.ts` | Pure transformation from model + configuration + laws (+ optional findings) to `TwinGraph`. Node types: identity, role, endpoint, resource, field, law. Edge types: `HAS_ROLE`, `OWNS`, `REQUIRES_ROLE`, `READS`, `WRITES`, `RETURNS`, `RELATES_TO`, `HAS_FIELD`, `EXPOSES`, `GOVERNS`, `VIOLATES`. Relationships between the same pair are merged into one edge, and edges to unknown entities are dropped. Every edge carries provenance. Also has `describeNode`, `describeEdge` and `lawHighlight` for the UI. |
 | `src/twin/layout.ts` | Deterministic layered layout: rows by entity type, barycenter ordering to reduce crossings, wrapping of long rows, no overlaps. |
 | `src/twin/SecurityTwinGraph.tsx` | React Flow view: custom node shapes per type, detail panel (metadata, relationships, relevant laws, provenance), field filter (key / all / none), law highlighting, fit view, reset layout, minimap for large graphs, and an error boundary so a graph failure never breaks the page. |
+| `src/twin/lazy.ts` | `createLazyTwinView(el)`: loads `mount.tsx` (React + React Flow) with a dynamic `import()` on the first `render`/`focusLaw`, shows a loading status, replays the latest calls once loaded, and shows an error with a Retry button if the chunk fails to load. |
+| `src/twin/styles.ts` | Imports the graph CSS eagerly (small), so the lazily loaded chunk needs no stylesheet of its own. |
 | `src/twin/mount.tsx` | `mountSecurityTwinGraph(el)` lets the vanilla Step 1 app render the React island: `render(input)` on build/rebuild (the graph is recomputed only then), and `focusLaw(id)` highlights a law's scope and zooms to it (used by the Constitution panel). |
 | `src/constitution/generate.ts` | Security Constitution engine: derives laws per category from the model and configuration, deduplicates them by key (merging provenance, scope and signals), rates confidence from evidence signals, and orders and numbers them deterministically. See docs/SECURITY_CONSTITUTION.md. |
 | `src/constitution/permissions.ts` | Matches free-text permission names from the configuration to resources, operations and own/foreign qualifiers by whole tokens (a labelled heuristic). |
+| `src/constitution/explore.ts` | Constitution Explorer: `filterLaws` (category, severity, confidence, text over id/statement/invariant/scope/provenance), `exportConstitutionJson` and `exportConstitutionMarkdown`. Exports are labelled specification-derived, record the filter, and escape spec-supplied text (Markdown/HTML injection). |
 | `src/constitution/legacy.ts` | `toLegacyLaws`: one legacy law per legacy category for Step 2, pointing back to the constitution laws it summarizes. |
 | `src/paths/index.ts` | The only path-template filler: `fillPath` (exact-name, encoded, strict by default; `onMissing: "keep"` for display), `pathParamNames`, `lastPathParam`, `MissingPathParameterError`, `InvalidPathParameterError`. Used by both apps. |
 | `src/target/authorization.ts` | `TargetAuthorizationState` (`UNKNOWN` / `CONFIGURED` / `CONFIRMED`) derived from the configured URL and an optional authorization record. Step 1 renders its target label from this. |
+| `src/target/policy.ts` | Sandbox target policy: `classifyHost` (loopback, private-network, reserved names such as `.test`/`.internal`, link-local, unspecified, public) on the parsed URL, `assessTargetHost`, `registerTarget` → `Target` (`environment: "sandbox"`, `authorizationStatus: "AUTHORIZED_BY_CONFIGURATION"`), `findTarget`, and `resolveRequestUrl`, which keeps every request on the target's origin and under its base path. Public, link-local (cloud metadata) and unspecified hosts cannot be registered. |
+| `src/ui/status.ts` | `showStatus(el, kind, message, {details, retry})` with `role="alert"` for errors and `role="status"` otherwise; `fetchText` (HTTP errors become readable errors) and `copyText` (reports a denied clipboard instead of claiming success). |
+| `src/ui/theme.css` | Shared design tokens and components (navy/charcoal surfaces, one blue accent, green/red/amber only for state, visible focus rings, reduced-motion support). |
 | `src/ui/safe-html.ts` | Escape-by-default templating. Plain strings are always escaped. Only `html```-built fragments reach `innerHTML`, through `setHtml`. |
 | `1-security-twin/app.js` | UI on top of the model: twin, inferences, the Constitution panel (from `src/constitution`) and the legacy law view for Step 2. Rebuilds from spec text on every change, so warnings never accumulate. |
-| `2-test-lab/app.js` | UI plus the prototype planner, executor and finding logic. Only rendering was changed in this phase. |
-| `scripts/build.mjs` | Bundles each app (esbuild, IIFE, minified) into `dist/<app>/` with its HTML, CSS and samples. |
-| `scripts/serve.mjs` | Static server for `dist/` on 127.0.0.1 with path-traversal protection. |
+| `2-test-lab/app.js` | UI plus the prototype planner, executor and finding logic. Live mode requires a registered target and sends requests only inside it (redirects refused). Mock runs are labelled SIMULATED everywhere, including the reasoning trail. See docs/TEST_LAB.md. |
+| `scripts/build.mjs` | Bundles each app (esbuild, minified) into `dist/<app>/` with its HTML, CSS and samples. Step 1 is built as ES modules with code splitting (`chunks/`); Step 2 as one IIFE. |
+| `scripts/check-bundle.mjs` | Bundle budget after a build: Step 1 entry ≤ 256 KiB, Step 2 ≤ 96 KiB, and exactly one lazily imported graph chunk. Part of `npm run check` and CI. |
+| `scripts/static-path.mjs` | Maps a request URL to a file inside `dist/`: 400 for undecodable paths, 403 for anything outside the root (including prefix-sharing siblings such as `dist-old/`). |
+| `scripts/serve.mjs` | Static server for `dist/` on 127.0.0.1, using `static-path.mjs`. |
 | `scripts/app-harness.mjs` | Loads a real app bundle into jsdom for tests. `fetch` serves only the app's own files, and any other URL throws. |
 | `scripts/e2e-server.mjs` | Builds `dist/` and serves it in one Node process: the Playwright `webServer`, so stopping it leaves no orphan. |
 | `playwright.config.ts`, `e2e/` | End-to-end tests on the production build in real browsers (Chrome + Edge channels on Windows, bundled Chromium elsewhere). `e2e/expected.ts` computes the expected graph/constitution from the model libraries. The tests use stable `data-testid` attributes (`twin-graph`, `twin-node` with `data-node-id`/`data-node-type`, React Flow's `rf__edge-*`, `twin-panel`, `law-card`, `law-focus`). |
@@ -72,11 +85,12 @@ Status as of the Security Constitution phase (2026-09-24). This describes what e
 
 ## Build and runtime
 
-- The apps are plain JavaScript ES modules that import TypeScript from `src/`. esbuild bundles each one into a single script.
+- The apps are plain JavaScript ES modules that import TypeScript from `src/`. esbuild bundles them; the Step 1 page loads `app.js` as `type="module"` and fetches the graph chunk only when the Security Twin is first rendered.
 - No backend exists yet. Everything runs in the browser.
 - Dependencies (runtime, bundled): `yaml`, `react` + `react-dom` 19, `@xyflow/react` 12 (React Flow, used only by the Security Twin graph). Dev: TypeScript 5.9 (strict, `jsx: react-jsx`), Vitest 4, ESLint 9 + typescript-eslint, esbuild, jsdom.
-- Step 1's bundle includes React and React Flow (about 556 KiB minified JS plus 20 KiB CSS). CSS imported from `src/` is emitted as `dist/1-security-twin/app.css`.
-- The test harness gives jsdom the layout APIs React Flow needs (`ResizeObserver`, `DOMMatrixReadOnly`, element sizes), so graph tests render real nodes and edges.
+- Step 1 page load: `app.js` 186 KiB + `app.css` 26 KiB. The graph chunk (React + React Flow, 413 KiB) loads on BUILD. Before code splitting the page loaded 589 KiB of JS up front. Step 2: `app.js` 49 KiB + `app.css` 7 KiB.
+- Both pages carry a Content-Security-Policy: scripts only from their own origin, no inline scripts or handlers, `object-src 'none'`, `base-uri 'none'`.
+- The test harness gives jsdom the layout APIs React Flow needs (`ResizeObserver`, `DOMMatrixReadOnly`, element sizes), so graph tests render real nodes and edges. It bundles without splitting, so the dynamic import is inlined there.
 
 ## Design rules
 

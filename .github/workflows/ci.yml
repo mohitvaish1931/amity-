@@ -1,4 +1,4 @@
-# Sentinel X verification: the same pipeline as `npm run check` (typecheck → lint → test → build),
+# Sentinel X verification: the same pipeline as `npm run check` (typecheck → lint → test → build → bundle budget),
 # followed by Playwright E2E on the production build.
 # No secrets or external credentials are used or needed.
 name: CI
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Verify (typecheck, lint, test, build, e2e)
+    name: Verify (typecheck, lint, test, build, bundle budget, e2e)
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -64,7 +64,13 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npm run build
 
-      # Browser E2E on the production build from the step above (no second build).
+      # The Step 1 entry must stay small and the graph must stay lazily loaded (scripts/check-bundle.mjs).
+      - name: Bundle budget
+        id: budget
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: npm run check:bundle
+
+      # Browser E2E on the production build from the build step (no second build).
       - name: Install Playwright Chromium
         id: pwinstall
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
@@ -106,6 +112,7 @@ jobs:
           LINT: ${{ steps.lint.outcome }}
           TEST: ${{ steps.test.outcome }}
           BUILD: ${{ steps.build.outcome }}
+          BUDGET: ${{ steps.budget.outcome }}
           E2E: ${{ steps.e2e.outcome }}
         run: |
           icon() { case "$1" in success) echo "✅ passed";; failure) echo "❌ failed";; skipped) echo "⏭ skipped";; *) echo "⚪ ${1:-not run}";; esac; }
@@ -119,5 +126,6 @@ jobs:
             echo "| Lint | $(icon "$LINT") |"
             echo "| Test | $(icon "$TEST") |"
             echo "| Build | $(icon "$BUILD") |"
+            echo "| Bundle budget | $(icon "$BUDGET") |"
             echo "| E2E (Playwright, Chromium) | $(icon "$E2E") |"
           } >> "$GITHUB_STEP_SUMMARY"

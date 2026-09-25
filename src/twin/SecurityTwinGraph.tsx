@@ -14,8 +14,6 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import "./twin.css";
 import {
   buildTwinGraph,
   describeEdge,

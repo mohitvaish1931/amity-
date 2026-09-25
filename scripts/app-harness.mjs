@@ -8,15 +8,22 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Bundle <appDir>/app.js (and the src/ modules it imports). Returns the JS and any bundled CSS. */
-export async function bundleApp(appDir, { minify = false, sourcemap = false } = {}) {
+/**
+ * Bundle <appDir>/app.js (and the src/ modules it imports). Returns the JS and any bundled CSS.
+ * With `split`, the output is ES modules with code splitting: dynamic import()s become separate chunks, returned in
+ * `chunks` (path relative to the app folder → code). Without it (tests), dynamic imports are inlined into one IIFE.
+ */
+export async function bundleApp(appDir, { minify = false, sourcemap = false, split = false } = {}) {
+  const outdir = path.join(ROOT, "dist", appDir);
   const result = await build({
-    entryPoints: [path.join(ROOT, appDir, "app.js")],
+    entryPoints: { app: path.join(ROOT, appDir, "app.js") },
     bundle: true,
-    format: "iife",
+    format: split ? "esm" : "iife",
+    splitting: split,
+    chunkNames: "chunks/[name]-[hash]",
     platform: "browser",
     target: "es2020",
-    outdir: path.join(ROOT, "dist", appDir), // naming only; write:false keeps output in memory
+    outdir, // naming only; write:false keeps output in memory
     write: false,
     minify,
     sourcemap: sourcemap ? "inline" : false,
@@ -24,9 +31,11 @@ export async function bundleApp(appDir, { minify = false, sourcemap = false } = 
     define: { "process.env.NODE_ENV": JSON.stringify(minify ? "production" : "development") },
     logLevel: "silent",
   });
-  const js = result.outputFiles.find((f) => f.path.endsWith(".js"));
-  const css = result.outputFiles.find((f) => f.path.endsWith(".css"));
-  return { js: js ? js.text : "", css: css ? css.text : "" };
+  const rel = (f) => path.relative(outdir, f.path).split(path.sep).join("/");
+  const js = result.outputFiles.find((f) => rel(f) === "app.js");
+  const css = result.outputFiles.find((f) => rel(f) === "app.css");
+  const chunks = Object.fromEntries(result.outputFiles.filter((f) => rel(f).startsWith("chunks/")).map((f) => [rel(f), f.text]));
+  return { js: js ? js.text : "", css: css ? css.text : "", chunks };
 }
 
 /** Minimal layout APIs React Flow needs in jsdom (it measures nodes and observes resizes). */

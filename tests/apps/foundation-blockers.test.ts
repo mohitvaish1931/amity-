@@ -19,11 +19,26 @@ describe("Step 1 target authorization state", () => {
   it("renders from state, never from a hardcoded 'Authorized Sandbox' label", async () => {
     app = await loadApp("1-security-twin");
     const box = app.$("targetAuthState");
-    // index.html pre-fills a sandbox URL: that is configuration, not authorization.
+    // No built-in target: nothing is configured until the user (or the loaded spec) provides a URL.
+    expect(app.$("baseUrl").value).toBe("");
+    expect(box.dataset.state).toBe("UNKNOWN");
+    expect(box.textContent).toMatch(/No sandbox target configured/);
+    // Loading the demo takes the URL from the spec's servers: configuration, not authorization.
+    app.click("demoBtn");
+    await app.settle();
+    expect(app.$("baseUrl").value).toBe(JSON.parse(readRepoFile("1-security-twin/samples/sample-swagger.json")).servers[0].url);
     expect(box.dataset.state).toBe("CONFIGURED");
     expect(box.textContent).toMatch(/Sandbox target configured/);
     expect(box.textContent).toMatch(/Authorization status unknown/);
     expect(app.document.body.textContent).not.toMatch(/Authorized Sandbox|Authorization confirmed/i);
+  });
+
+  it("does not overwrite a URL the user already entered when loading the demo", async () => {
+    app = await loadApp("1-security-twin");
+    typeUrl(app, "http://127.0.0.1:9000");
+    app.click("demoBtn");
+    await app.settle();
+    expect(app.$("baseUrl").value).toBe("http://127.0.0.1:9000");
   });
 
   it("follows the URL field", async () => {

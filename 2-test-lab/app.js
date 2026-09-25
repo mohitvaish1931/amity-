@@ -1,18 +1,20 @@
-// Sentinel X — Part 2 v2: Autonomous Lab. Consumes Part 1 testable-security-model.json. Fully data-driven.
+// Sentinel X — Part 2: Test Lab (heuristic planner). Consumes Part 1 testable-security-model.json. Fully data-driven.
 // Auth: per-identity credentials supplied by user (Bearer/API-key/Cookie). The lab never invents auth.
-// Sandbox gate: explicit user approval of the exact URL — never a substring heuristic.
+// Sandbox gate: the exact URL must be registered as a Target (src/target/policy.ts): loopback, private-network or
+// reserved names only, with the user's explicit statement of authorization. Every live request stays inside it.
 // Hypotheses: heuristic planner by default; optional user-provided LLM endpoint only enhances wording.
+import "../src/ui/theme.css";
 import { html, joinHtml, setHtml } from "../src/ui/safe-html";
+import { copyText, fetchText, showStatus } from "../src/ui/status";
 import { PathParameterError, fillPath, lastPathParam, pathParamNames } from "../src/paths/index";
+import { assessTargetHost, findTarget, registerTarget, resolveRequestUrl } from "../src/target/policy";
 const $ = (id) => document.getElementById(id);
 let S = { model:null, tests:[], results:{}, findings:[], running:false, sel:null, execMode:"mock", mockMode:"vulnerable", sandboxUrl:"",
   auth:{ scheme:"bearer", apiKeyName:"X-API-Key", cookieName:"session", creds:{} }, cookieAck:false,
-  authorized:[], llm:{ endpoint:"", key:"", model:"", enabled:false }, llmIdeas:[] };
+  targets:[], llm:{ endpoint:"", key:"", model:"", enabled:false }, llmIdeas:[] };
 
 function log(m){ const c=$("console"); const t=new Date().toLocaleTimeString(); c.appendChild(document.createTextNode(`\n[${t}] ${m}`)); c.scrollTop=c.scrollHeight; }
-function isSandboxLike(url){ return /(sandbox|localhost|127\.|10\.|192\.168|staging|test|example|mock)/i.test(url||""); }
-function normUrl(u){ return String(u||"").trim().replace(/\/+$/,"").toLowerCase(); }
-function isAuthorized(url){ const n=normUrl(url); return S.authorized.some(a=>normUrl(a.url)===n); }
+function isAuthorized(url){ return !!findTarget(S.targets, url); }
 // Pure + testable: real auth headers from user-supplied per-identity credentials. Never invents tokens.
 // NOTE: browsers forbid scripts from setting the Cookie header, so pasted cookie VALUES
 // cannot be sent cross-origin. The cookie scheme therefore uses the browser jar
@@ -54,8 +56,9 @@ function adminIdentity(){ const ar=adminRole(); if(!ar) return null; return (S.m
 function loadModel(obj){
   if(!obj||!Array.isArray(obj.endpoints)||!Array.isArray(obj.laws)) throw new Error("Not a testable-security-model (need endpoints[] + laws[]).");
   S.model=obj; S.tests=[]; S.results={}; S.findings=[]; S.sel=null;
-  S.sandboxUrl=obj.sandboxBaseUrl||"";
-  $("sandboxUrl").value=S.sandboxUrl;
+  // The model only suggests a target: a URL the user already entered is never replaced (audit BUG-11).
+  if(!$("sandboxUrl").value.trim()) $("sandboxUrl").value=obj.sandboxBaseUrl||"";
+  S.sandboxUrl=$("sandboxUrl").value.trim();
   $("modelInfo").textContent=`${obj.version||"?"} · ${obj.endpoints.length} endpoints · ${obj.laws.length} laws · ${(obj.testIdentities||[]).length} identities`;
 }
 
@@ -84,7 +87,8 @@ function planTests(){
   const base=baseIdentity(), adm=adminIdentity();
   const idGets=allIdGets(), adminEps=allAdminEps(); // ALL eligible endpoints, not just the first
   const prot=(M.endpoints||[]).filter(e=>e.auth);
-  const mk=(o)=>{ const h=o.hypothesis; return Object.assign({hypothesisSource:(h&&h.source)||"heuristic",hypothesis:(h&&h.text)||h},o); };
+  // The template object {text, source} is flattened into a string + source (spread last so it wins over o.hypothesis).
+  const mk=(o)=>{ const h=o.hypothesis; return {...o, hypothesisSource:(h&&h.source)||"heuristic", hypothesis:(h&&h.text)||h}; };
   for(const law of M.laws){
     const cat=law.category||"POLICY";
     if(cat==="BOLA"){
@@ -201,9 +205,10 @@ async function mockRequest(test, overridePath){
     request:{method:test.target.method,path,identity:test.identityId,auth:"simulated-identity (mock only)"}, mock:true, mode:S.mockMode };
 }
 async function liveRequest(test){
-  const url=(S.sandboxUrl||"").replace(/\/$/,"")+test.target.path;
-  // Gate: explicit user approval of THIS exact URL. The substring hint is informational only, never a pass.
-  if(!isAuthorized(S.sandboxUrl)) throw new Error("Live run blocked: this sandbox URL has not been explicitly approved. Click 'Approve this sandbox' first.");
+  // Gate: THIS exact URL must be a registered sandbox target, and the request must stay inside it.
+  const target=findTarget(S.targets, S.sandboxUrl);
+  if(!target) throw new Error("Live run blocked: this sandbox URL is not a registered target. Register it first (loopback, private-network or reserved hosts only).");
+  const url=resolveRequestUrl(target, test.target.path);
   // Cookie jar only runs if the user confirms the sandbox actually supports credentialed requests.
   if(isCookieScheme()&&!S.cookieAck) throw new Error("Live cookie run blocked: confirm your sandbox supports CORS credentials (exact origin, no wildcard) and that you are logged in — tick the cookie checkbox first.");
   const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),10000);
@@ -211,7 +216,8 @@ async function liveRequest(test){
   const { headers:authH, credentialProvided } = buildAuthHeaders(test);
   if(test.identityId&&!credentialProvided&&!isCookieScheme()) throw new Error(`Live run blocked: no credential configured for identity ${test.identityId}. Add it in Authentication first (or run this case in Mock mode).`);
   const headers=Object.assign({"Content-Type":"application/json","X-Sentinel-Test":test.id+"/"+test.lawId},authH);
-  const opts={method:test.target.method,headers,signal:ctl.signal,mode:"cors"};
+  // redirect:"error": a redirect could lead outside the registered target, so it fails the request instead.
+  const opts={method:test.target.method,headers,signal:ctl.signal,mode:"cors",redirect:"error"};
   if(isCookieScheme()) opts.credentials=test.identityId?"include":"omit"; // jar only for identity tests; anonymous stays anonymous
   else opts.credentials="omit";
   if(test.target.method!=="GET") opts.body=JSON.stringify({id:test.objectId||"1"});
@@ -280,11 +286,12 @@ async function confirm(test, resp, analysis){
   if(r2.status!==resp.status){ steps.push("flaky (status changed) → REJECTED as false positive"); return {status:"REJECTED",steps,confirmed:false,repeat:r2}; }
   if(test.objectId){ const o=ownerOf(test.objectId); steps.push(o?`ownership: object ${test.objectId} owner=${o}, requester=${test.identityId} → ${o===test.identityId?"own":"FOREIGN confirmed"}`:"ownership: unknown object → REJECTED"); if(!o||o===test.identityId){ steps.push("not foreign → REJECTED"); return {status:"REJECTED",steps,confirmed:false,repeat:r2}; } }
   if(test.kind==="BOLA"||test.kind==="DATA"||test.kind==="SEQUENCE"){
-    if(analysis.sensFound.length) steps.push(`sensitive data confirmed: ${analysis.sensFound.slice(0,5).join(", ")}`);
+    if(analysis.sensFound.length) steps.push(`${S.execMode==="mock"?"sensitive fields present in the simulated response":"sensitive data confirmed"}: ${analysis.sensFound.slice(0,5).join(", ")}`);
     else if(r2.status===200) steps.push("object data returned cross-owner (no flagged fields, still boundary failure)");
     else { steps.push("no data returned → REJECTED"); return {status:"REJECTED",steps,confirmed:false,repeat:r2}; }
   }
-  steps.push("CONFIRMED");
+  // A mock run only simulates the sandbox: its reasoning trail must not claim a confirmation.
+  steps.push(S.execMode==="mock"?"SIMULATED (a live sandbox run would be needed to confirm)":"CONFIRMED");
   return {status:"CONFIRMED",steps,confirmed:true,repeat:r2};
 }
 
@@ -312,7 +319,7 @@ async function runOne(id){
     if(cf.status==="CONFIRMED") buildFindings();
     renderAll();
   } catch(e){ S.results[t.id]={status:"ERROR",reason:String(e.message||e),test:t}; log(`${t.id} ERROR ${e.message}`); renderAll(); }
-  finally { S.running=false; }
+  finally { S.running=false; updateBtns(); }
 }
 async function runAll(){
   if(S.running||!S.tests.length) return;
@@ -343,7 +350,7 @@ async function runAll(){
     buildFindings();
     renderAll();
     log(`done: ${Object.values(S.results).filter(r=>r.status==="PASS").length} pass, ${Object.values(S.results).filter(r=>r.status==="VIOLATION").length} violations, ${Object.values(S.results).filter(r=>r.status==="REJECTED").length} rejected`);
-  } finally { S.running=false; }
+  } finally { S.running=false; updateBtns(); }
 }
 
 // ---------- findings + evidence ----------
@@ -353,14 +360,16 @@ function buildFindings(){
   for(const id of Object.keys(S.results)){
     const r=S.results[id]; if(r.status!=="VIOLATION") continue;
     const law=(S.model.laws||[]).find(l=>l.id===r.test.lawId)||{};
-    const conf=(law.confidence==="HIGH")?98:(law.confidence==="MEDIUM"?85:70);
+    // No fabricated percentages: report the law's own confidence level. Mock runs are simulations, never confirmations.
+    const conf=law.confidence||"UNRATED";
+    const simulated=S.execMode==="mock";
     const curlAuth = r.test.identityId ? (isCookieScheme()?` -b "<cookies-from-sandbox-login>"`:` -H "${authnHeaderPreview(r.test)}"`): "";
     out.push({ id:"FINDING-"+String(n++).padStart(3,"0"), type:TYPE_LABEL[r.test.kind]||r.test.kind,
       law:r.test.lawId, endpoint:`${r.test.target.method} ${r.test.target.pathTemplate}`, severity:law.severity||"Medium",
       identity:r.test.identityId, identityName:nameOf(r.test.identityId),
       ownResource:r.test.baseObjectId||null, foreignResource:r.test.objectId||null,
       expected:r.test.expectText, observed:`HTTP ${r.resp.status}`,
-      sensitiveData:r.analysis.sensFound||[], confidence:conf, status:"CONFIRMED",
+      sensitiveData:r.analysis.sensFound||[], confidence:conf, status:simulated?"SIMULATED":"CONFIRMED", simulated,
       mutation:r.test.mutation, hypothesis:r.test.hypothesis, hypothesisSource:r.test.hypothesisSource||"heuristic",
       authScheme:S.execMode==="live"?S.auth.scheme:"simulated-identity (mock)",
       sequenceProof:(r.stepResults||[]).map(s=>({label:s.label,expected:s.expectedDeny?"DENY":"ALLOW",
@@ -375,7 +384,7 @@ function buildFindings(){
 }
 function evidencePackage(){
   return { version:"part2-v2-evidence", sandboxOnly:true, sandboxUrl:S.sandboxUrl,
-    sandboxApproval:S.authorized.map(a=>({url:a.url,approvedAt:a.at,by:"explicit user approval (no substring heuristic)"})),
+    targets:S.targets.map(t=>({...t, note:"authorization stated by the user at registration; not independently verified"})),
     executor:S.execMode, mockMode:S.execMode==="mock"?S.mockMode:null,
     auth:{scheme:S.execMode==="live"?S.auth.scheme:"simulated-identity (mock)",credentialsConfigured:Object.keys(S.auth.creds||{}).length,secretValues:"never exported",
       cookieLimitation:isCookieScheme()?"cookie scheme = browser jar via credentials:include, only if sandbox supports CORS credentials; pasted cookie values unsupported cross-origin (forbidden header); needs prior browser login + explicit support acknowledgement":null,
@@ -390,14 +399,14 @@ function evidencePackage(){
 
 // ---------- render (all output goes through html``/setHtml, which escape every interpolated value) ----------
 function renderAll(){ renderPlanner(); renderTargets(); renderTests(); renderPreview(); renderResults(); renderMatrix(); renderFindings(); updateBtns(); }
-function updateBtns(){ $("runAllBtn").disabled=!S.tests.length||S.running; $("resetBtn").disabled=!Object.keys(S.results).length; $("dlEvidence").disabled=!S.findings.length; $("copyEvidence").disabled=!S.findings.length; }
+function updateBtns(){ renderTargetBar(); $("runAllBtn").disabled=!S.tests.length||S.running; $("resetBtn").disabled=!Object.keys(S.results).length; $("dlEvidence").disabled=!S.findings.length; $("copyEvidence").disabled=!S.findings.length; }
 function renderPlanner(){
   if(!S.model){ $("planner").textContent="—"; return; }
   const cond=S.model.laws.length, cases=S.tests.length;
   setHtml($("planner"), html`<div class="tiles"><div class="tile"><b>${S.model.laws.length}</b><span class="sub">laws</span></div>
   <div class="tile"><b>${cond}</b><span class="sub">conditions</span></div><div class="tile"><b>${cases}</b><span class="sub">cases</span></div>
   <div class="tile"><b>${(S.model.testIdentities||[]).length}</b><span class="sub">identities</span></div></div>
-  <table><tr><th>Law</th><th>Category</th><th>Cases</th><th>Priority</th></tr>${S.model.laws.map(l=>{ const ts=S.tests.filter(t=>t.lawId===l.id); return html`<tr><td><code>${l.id}</code> ${l.title||""}</td><td>${l.category}</td><td>${ts.length}</td><td>${ts.length?Math.min(...ts.map(t=>t.priority)):"—"}</td></tr>`; })}</table>${(S.planWarnings||[]).length?html`<div class="note">${joinHtml(S.planWarnings, html`<br>`)}</div>`:""}`);
+  <table><tr><th scope="col">Law</th><th scope="col">Category</th><th scope="col">Cases</th><th scope="col">Priority</th></tr>${S.model.laws.map(l=>{ const ts=S.tests.filter(t=>t.lawId===l.id); return html`<tr><td><code>${l.id}</code> ${l.title||""}</td><td>${l.category}</td><td>${ts.length}</td><td>${ts.length?Math.min(...ts.map(t=>t.priority)):"—"}</td></tr>`; })}</table>${(S.planWarnings||[]).length?html`<div class="note">${joinHtml(S.planWarnings, html`<br>`)}</div>`:""}`);
 }
 function targetReason(e){
   const r=[]; if(/\{.+\}/.test(e.path)) r.push("object-ID"); if(/^\/admin/i.test(e.path)||e.action==="AdminAction") r.push("admin"); if(e.method!=="GET") r.push("write"); if(e.auth) r.push("auth-required");
@@ -409,19 +418,20 @@ function renderTargets(){
   if(!S.tests.length){ $("targets").textContent="—"; return; }
   const g={}; S.tests.forEach(t=>{ const k=t.target.method+" "+t.target.pathTemplate; g[k]=g[k]||{ep:k,n:0,prio:9,res:t.target.resource}; g[k].n++; g[k].prio=Math.min(g[k].prio,t.priority); });
   const rows=Object.values(g).sort((a,b)=>a.prio-b.prio).map(x=>{ const e=(S.model.endpoints||[]).find(e=>(e.method+" "+e.path)===x.ep); return html`<tr><td><code>${x.ep}</code></td><td>${x.n}</td><td>P${x.prio}</td><td class="sub">${e?targetReason(e):""}</td></tr>`; });
-  setHtml($("targets"), html`<table><tr><th>Endpoint</th><th>Cases</th><th>Prio</th><th>Why selected</th></tr>${rows}</table>`);
+  setHtml($("targets"), html`<table><tr><th scope="col">Endpoint</th><th scope="col">Cases</th><th scope="col">Prio</th><th scope="col">Why selected</th></tr>${rows}</table>`);
 }
 function renderTests(){
   if(!S.tests.length){ $("tests").textContent="—"; return; }
   setHtml($("tests"), html`${S.tests.map(t=>{ const r=S.results[t.id]; const st=r?r.status:(t.skip?"SKIPPED":"PENDING");
-    return html`<div class="test ${S.sel===t.id?"sel":""}" data-t="${t.id}"><h3>${t.id} · ${t.lawId} · ${t.kind} <span class="badge b-${st}">${st}</span> <span class="sub">P${t.priority}</span></h3><div class="sub">[${t.hypothesisSource||"heuristic"}] ${t.hypothesis}</div><div><code>${t.target.method}</code> <code>${t.target.path}</code> as <code>${t.identityId||"anonymous"}</code> → expect ${t.expectText}</div></div>`; })}`);
-  document.querySelectorAll("#tests .test").forEach(d=>d.onclick=()=>{ S.sel=d.dataset.t; renderTests(); renderPreview(); });
+    return html`<div class="test ${S.sel===t.id?"sel":""}" data-t="${t.id}" role="button" tabindex="0" aria-pressed="${S.sel===t.id?"true":"false"}"><h3>${t.id} · ${t.lawId} · ${t.kind} <span class="badge b-${st}">${st}</span> <span class="sub">P${t.priority}</span></h3><div class="sub">[${t.hypothesisSource||"heuristic"}] ${t.hypothesis}</div><div><code>${t.target.method}</code> <code>${t.target.path}</code> as <code>${t.identityId||"anonymous"}</code> → expect ${t.expectText}</div></div>`; })}`);
+  const select=d=>{ S.sel=d.dataset.t; renderTests(); renderPreview(); const again=[...document.querySelectorAll("#tests .test")].find(x=>x.dataset.t===S.sel); if(again) again.focus(); };
+  document.querySelectorAll("#tests .test").forEach(d=>{ d.onclick=()=>select(d); d.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); select(d); } }; });
 }
 function renderPreview(){
   const t=S.tests.find(x=>x.id===S.sel); if(!t){ setHtml($("preview"), html`<p class="sub">Select a test.</p>`); return; }
   const r=S.results[t.id];
   const noCred=S.execMode==="live"&&t.identityId&&!(S.auth.creds||{})[t.identityId]&&!isCookieScheme();
-  const execution=S.execMode==="live"?(isAuthorized(S.sandboxUrl)?"APPROVED SANDBOX":"UNAPPROVED — approve first")+(isCookieScheme()?(S.cookieAck?" · COOKIE SUPPORT ACKED":" · COOKIE SUPPORT NOT ACKED — run will be blocked"):""):"MOCK "+S.mockMode;
+  const execution=S.execMode==="live"?(isAuthorized(S.sandboxUrl)?"REGISTERED SANDBOX TARGET":"NOT REGISTERED: register the target first")+(isCookieScheme()?(S.cookieAck?" · COOKIE SUPPORT ACKED":" · COOKIE SUPPORT NOT ACKED — run will be blocked"):""):"MOCK "+S.mockMode;
   setHtml($("preview"), html`<div class="test sel"><h3>Preview ${t.id} — ${t.lawId}</h3>
   <div><b>Hypothesis (${t.hypothesisSource||"heuristic"} planner):</b> ${t.hypothesis}</div>
   <div><b>Identity:</b> <code>${t.identityId||"anonymous"}</code> <b>Endpoint:</b> <code>${t.target.method} ${t.target.pathTemplate}</code></div>
@@ -436,12 +446,12 @@ function renderPreview(){
 function renderResults(){
   const ids=Object.keys(S.results); if(!ids.length){ $("results").textContent="—"; return; }
   setHtml($("results"), html`${ids.map(id=>{ const r=S.results[id]; const t=r.test;
-    return html`<div class="test"><h3>${id} · ${t.lawId} · ${t.kind} <span class="badge b-${r.status}">${r.status}</span></h3>
+    return html`<div class="test"><h3>${id} · ${t.lawId} · ${t.kind} <span class="badge b-${r.status}">${r.status}</span>${r.resp&&r.resp.mock?html` <span class="badge b-SIMULATED">SIMULATED</span>`:""}</h3>
     <div class="sub">[${t.hypothesisSource||"heuristic"}] ${t.hypothesis}</div>
     <div><code>${t.target.method} ${t.target.path}</code> as <code>${t.identityId||"anonymous"}</code> → expected ${t.expectText}, got ${r.resp?("HTTP "+r.resp.status):(r.reason||"")}</div>
     ${r.analysis?html`<div class="sub">ownership: ${r.analysis.rel}${r.analysis.owner?(" (owner "+r.analysis.owner+")"):""} · sensitive: ${(r.analysis.sensFound||[]).join(", ")||"none"}${r.analysis.sim!=null?(` · similarity ${r.analysis.sim}%`):""}</div>`:""}
     ${(r.steps||[]).length?html`<div class="sub">confirmation: ${r.steps.join(" → ")}</div>`:""}
-    ${r.stepResults?html`<table><tr><th>Step</th><th>Request</th><th>Expected</th><th>Got</th><th>Step verdict</th></tr>${r.stepResults.map(s=>html`<tr><td>${s.label}</td><td><code>${s.path}</code></td><td>${s.expectedDeny?"DENY":"ALLOW"}</td><td>${s.resp.status}</td><td>${s.analysis.verdict} — ${s.analysis.reason}</td></tr>`)}</table>`:""}
+    ${r.stepResults?html`<table><tr><th scope="col">Step</th><th scope="col">Request</th><th scope="col">Expected</th><th scope="col">Got</th><th scope="col">Step verdict</th></tr>${r.stepResults.map(s=>html`<tr><td>${s.label}</td><td><code>${s.path}</code></td><td>${s.expectedDeny?"DENY":"ALLOW"}</td><td>${s.resp.status}</td><td>${s.analysis.verdict} — ${s.analysis.reason}</td></tr>`)}</table>`:""}
     ${r.resp?html`<div class="inv">REQ ${r.resp.request.method} ${r.resp.url}\nRES ${r.resp.status} (${r.resp.ms}ms)\n${String(JSON.stringify(r.resp.body)).slice(0,600)}</div>`:""}</div>`; })}`);
 }
 function renderMatrix(){
@@ -453,19 +463,19 @@ function renderMatrix(){
       const cell=(obj,exp)=>{ if(!obj) return "—"; let p; try{ p=objectPath(idGet.path,obj.objectId); }catch(e){ return "not planned — missing path parameter values"; } const hit=Object.keys(S.results).find(rid=>{ const r=S.results[rid]; return r.test.identityId===i.id&&r.test.target.path===p&&r.test.target.method===idGet.method; });
         if(!hit) return `${exp} (pending)`; const st=S.results[hit].status; return st==="PASS"?`✓ ${exp}`:`${st} (exp ${exp})`; };
       return html`<tr><td><code>${i.id}</code> (${i.role})</td><td><code>${mine?displayObjectPath(idGet.path,mine.objectId):"—"}</code><br>${cell(mine,"ALLOW")}</td><td><code>${foreign?displayObjectPath(idGet.path,foreign.objectId):"—"}</code><br>${cell(foreign,"DENY")}</td></tr>`; });
-    return html`<h3><code>${idGet.method+" "+idGet.path}</code></h3><table><tr><th>Identity</th><th>Own (expect ALLOW)</th><th>Foreign (expect DENY)</th></tr>${rows}</table>`;
+    return html`<h3><code>${idGet.method+" "+idGet.path}</code></h3><table><tr><th scope="col">Identity</th><th scope="col">Own (expect ALLOW)</th><th scope="col">Foreign (expect DENY)</th></tr>${rows}</table>`;
   })}`);
 }
 function renderFindings(){
-  if(!S.findings.length){ setHtml($("findings"), html`<p class="sub">No confirmed findings yet. Run tests (try Mock: Vulnerable first).</p>`); $("evidenceOut").textContent="—"; return; }
-  setHtml($("findings"), html`${S.findings.map(f=>html`<div class="test"><h3>${f.id} · ${f.type} <span class="badge b-CONFIRMED">CONFIRMED ${f.confidence}%</span> [${f.severity}]</h3>
+  if(!S.findings.length){ setHtml($("findings"), html`<p class="sub">No findings yet. Run tests. Mock-mode results are labelled SIMULATED, not confirmed.</p>`); $("evidenceOut").textContent="—"; return; }
+  setHtml($("findings"), html`${S.findings.map(f=>html`<div class="test"><h3>${f.id} · ${f.type} <span class="badge b-${f.status}">${f.status}</span> <span class="badge b-${f.confidence}">law confidence ${f.confidence}</span> [${f.severity}]</h3>
   <div>Endpoint <code>${f.endpoint}</code> · identity <code>${f.identity}</code> (${f.identityName}) · expected ${f.expected} · observed ${f.observed}</div>
   <div class="sub">own=${f.ownResource||"—"} foreign=${f.foreignResource||"—"} · sensitive: ${(f.sensitiveData||[]).join(", ")||"none"}</div>
   ${(f.sequenceProof||[]).length?html`<div class="sub">proof chain: ${f.sequenceProof.map(s=>`${s.label} → exp ${s.expected}, got ${s.response.status} (${s.stepVerdict})`).join(" → ")}</div>`:""}
   <div class="inv">${f.reproduction.curl}</div></div>`)}`);
   $("evidenceOut").textContent=JSON.stringify(evidencePackage(),null,2);
 }
-// ---------- auth + approval + optional LLM wording ----------
+// ---------- auth + target registration + optional LLM wording ----------
 function renderAuth(){
   const box=$("authBox"); if(!box) return;
   if(!S.model){ setHtml(box, html`<p class="sub">Load a model first — credential fields appear per identity.</p>`); return; }
@@ -477,7 +487,7 @@ function renderAuth(){
     renderApproval(); return;
   }
   setHtml(box, html`${(S.model.testIdentities||[]).map(i=>html`<div class="row"><label style="margin:0;min-width:220px">${i.name} <code>${i.id}</code> (${i.role})</label>
-    <input type="password" data-cred="${i.id}" placeholder="token / key (stored in memory only)" style="flex:1"></div>`)}
+    <input type="password" data-cred="${i.id}" aria-label="Credential for ${i.name} (${i.id})" placeholder="token / key (stored in memory only)" style="flex:1"></div>`)}
     <p class="sub">Scheme <b>${S.auth.scheme}</b> · credentials held in browser memory only — never written to findings or evidence.</p>`);
   // Credential values are set as DOM properties, never serialized into markup.
   box.querySelectorAll("[data-cred]").forEach(inp=>{ inp.value=(S.auth.creds||{})[inp.dataset.cred]||""; inp.onchange=()=>{ S.auth.creds[inp.dataset.cred]=inp.value.trim(); }; });
@@ -486,34 +496,55 @@ function renderAuth(){
 function renderApproval(){
   const box=$("approvalBox"); if(!box) return;
   const url=($("sandboxUrl").value||"").trim();
-  const ok=isAuthorized(url);
-  const hint=isSandboxLike(url)?"URL looks sandbox-like (hint only — not approval).":"URL does not look sandbox-like (hint only — approval is still your explicit decision).";
-  setHtml(box, html`<p class="sub">${hint}</p>
-  <div class="row"><label style="margin:0"><input type="checkbox" id="approveChk" style="width:auto"> I confirm I am authorized to run security tests against <code>${url||"(empty)"}</code></label>
-  <button class="ghost" id="approveBtn">Approve this sandbox</button></div>
-  <p class="sub">Approved targets: ${S.authorized.length?joinHtml(S.authorized.map(a=>html`<code>${a.url}</code> (${a.at})`)," · "):"none — live runs are blocked until you approve"}</p>
-  ${S.execMode==="live"?(ok?html`<p class="ok">● Live runs allowed for this URL.</p>`:html`<p class="warn">● Live runs blocked — approve this exact URL first.</p>`):""}`);
-  $("approveBtn").onclick=()=>{
-    if(!$("approveChk").checked){ alert("Tick the confirmation checkbox first — approval must be explicit."); return; }
-    if(!url){ alert("Enter a sandbox URL first."); return; }
-    if(!S.authorized.some(a=>normUrl(a.url)===normUrl(url))) S.authorized.push({url,at:new Date().toISOString()});
-    log(`sandbox approved: ${url}`);
+  const target=findTarget(S.targets, url);
+  const a=assessTargetHost(url);
+  const registered = S.targets.length
+    ? html`<p class="sub">Registered targets: ${joinHtml(S.targets.map(t=>html`<code>${t.baseUrl}</code> (${t.id}, ${t.hostClass}, ${t.registeredAt})`)," · ")}</p>`
+    : html`<p class="sub">Registered targets: none. Live runs are blocked until you register one.</p>`;
+  let body;
+  if(target) body=html`<p class="ok" data-testid="target-registered">● Registered sandbox target ${target.id}: <code>${target.baseUrl}</code> · authorized by configuration (your statement, not independently verified).</p>`;
+  else if(!url) body=html`<p class="sub">Enter the sandbox base URL to register it as a target.</p>`;
+  else if(!a.registrable) body=html`<p class="warn" role="alert" data-testid="target-refused">● <code>${url}</code> cannot be registered: ${a.reason}</p>`;
+  else body=html`<p class="sub">Host class: ${a.hostClass}. ${a.reason}</p>
+    <div class="row"><label style="margin:0" for="approveChk"><input type="checkbox" id="approveChk" style="width:auto"> I confirm I am authorized to run security tests against <code>${a.baseUrl}</code></label>
+    <button class="ghost" type="button" id="approveBtn">Register sandbox target</button></div>`;
+  setHtml(box, html`${body}${registered}${S.execMode==="live"&&!target?html`<p class="warn">● Live runs blocked for this URL.</p>`:""}`);
+  if($("approveBtn")) $("approveBtn").onclick=()=>{
+    if(!$("approveChk").checked){ showStatus($("targetStatus"), "error", "Tick the confirmation checkbox first: registration must be explicit."); return; }
+    const r=registerTarget(url,{ id:`TGT-${S.targets.length+1}`, registeredAt:new Date().toISOString() });
+    if(!r.ok){ showStatus($("targetStatus"), "error", `Cannot register this target: ${r.reason}`); return; }
+    S.targets.push(r.target);
+    log(`sandbox target registered: ${r.target.id} ${r.target.baseUrl}`);
+    showStatus($("targetStatus"), "success", `Registered ${r.target.id}: ${r.target.baseUrl}.`);
     renderApproval();
   };
+  renderTargetBar();
+}
+/** Always-visible statement of what a run would hit: target, environment, authorization basis, mode and run state. */
+function renderTargetBar(){
+  const bar=$("targetBar"); if(!bar) return;
+  const url=($("sandboxUrl").value||"").trim();
+  const target=findTarget(S.targets, url);
+  const done=Object.keys(S.results).length;
+  const run=S.running?`running (${done}/${S.tests.length})`:S.tests.length?`${done}/${S.tests.length} tests run`:"no tests planned";
+  setHtml(bar, html`<span><b>TARGET</b> <code data-testid="target-url">${url||"none"}</code></span>
+    <span data-testid="target-env">${target?html`<b>SANDBOX</b> · AUTHORIZED BY CONFIGURATION <span class="sub">(not independently verified)</span>`:html`<b class="warn">NOT REGISTERED</b>`}</span>
+    <span><b>MODE</b> ${S.execMode==="live"?"Live sandbox":`Mock (simulated, ${S.mockMode})`}</span>
+    <span><b>RUN</b> <span data-testid="run-state">${run}</span></span>`);
 }
 // Optional LLM wording: user-supplied OpenAI-compatible endpoint rewords heuristic hypotheses.
 // This is wording assistance only — test generation, execution and verdicts stay deterministic.
 async function llmEnhance(oneId){
   S.llm.endpoint=($("llmEndpoint").value||"").trim(); S.llm.key=$("llmKey").value; S.llm.model=($("llmModel").value||"").trim();
-  if(!S.llm.enabled){ alert("LLM wording is off. Tick 'Enable' to use your endpoint (optional)."); return; }
-  if(!S.llm.endpoint||!S.llm.key){ alert("Enter LLM endpoint and API key first."); return; }
+  if(!S.llm.enabled){ showStatus($("llmStatus"), "info", "LLM wording is off. Tick 'Enable LLM' to use your endpoint (optional)."); return; }
+  if(!S.llm.endpoint||!S.llm.key||!S.llm.model){ showStatus($("llmStatus"), "error", "Enter the LLM endpoint, API key and model first."); return; }
   const targets=S.tests.filter(t=>!oneId||t.id===oneId);
   for(const t of targets){
     try{
       const prompt=`Reword this security-test hypothesis in one sentence, keeping all IDs/paths exact. Law ${t.lawId} (${t.kind}). Endpoint ${t.target.method} ${t.target.path}. Identity ${t.identityId||"anonymous"}. Mutation ${JSON.stringify(t.mutation)}. Expected ${t.expectText}. Current: ${t.hypothesis}`;
       const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),15000);
       const r=await fetch(S.llm.endpoint,{method:"POST",signal:ctl.signal,headers:{"Content-Type":"application/json","Authorization":"Bearer "+S.llm.key},
-        body:JSON.stringify({model:S.llm.model||"gpt-4o-mini",messages:[{role:"system",content:"You reword security test hypotheses precisely. Never change IDs, paths, or expected outcomes."},{role:"user",content:prompt}],max_tokens:120})});
+        body:JSON.stringify({model:S.llm.model,messages:[{role:"system",content:"You reword security test hypotheses precisely. Never change IDs, paths, or expected outcomes."},{role:"user",content:prompt}],max_tokens:120})});
       clearTimeout(to);
       const j=await r.json();
       const txt=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
@@ -527,16 +558,16 @@ async function llmEnhance(oneId){
 // review them and, if valid, recreate manually. Keeps real LLM generation optional.
 async function llmSuggest(){
   S.llm.endpoint=($("llmEndpoint").value||"").trim(); S.llm.key=$("llmKey").value; S.llm.model=($("llmModel").value||"").trim();
-  if(!S.llm.enabled){ alert("Tick 'Enable LLM' first (optional)."); return; }
-  if(!S.model){ alert("Plan tests first so the LLM gets model context."); return; }
-  if(!S.llm.endpoint||!S.llm.key){ alert("Enter LLM endpoint and API key first."); return; }
+  if(!S.llm.enabled){ showStatus($("llmStatus"), "info", "Tick 'Enable LLM' first (optional)."); return; }
+  if(!S.model){ showStatus($("llmStatus"), "empty", "Plan tests first so the LLM gets model context."); return; }
+  if(!S.llm.endpoint||!S.llm.key||!S.llm.model){ showStatus($("llmStatus"), "error", "Enter the LLM endpoint, API key and model first."); return; }
   const eps=(S.model.endpoints||[]).map(e=>`${e.method} ${e.path} [${e.resource}/${e.action}, auth:${e.auth?"yes":"no"}]`).join("\n");
   const prompt=`You are a security-test reviewer. Given this sandbox API model, suggest up to 5 EXTRA boundary-test ideas NOT already covered (covered kinds: BOLA baseline/boundary/anonymous, sequence own-then-foreign, admin deny/allow, data-leak, per-endpoint anonymous). Reply as short numbered lines, each: METHOD path — idea — why. Model:\nEndpoints:\n${eps}\nOwnership field(s): ${Object.keys(S.model.resources||{}).map(r=>r+"."+((S.model.resources[r]||{}).ownershipField||"none")).join(", ")}\nRoles: ${[...new Set((S.model.testIdentities||[]).map(i=>i.role))].join(", ")}\nSensitive: ${sensFields().slice(0,10).join(", ")}`;
   setHtml($("llmIdeas"), html`<p class="sub">Asking LLM…</p>`);
   try{
     const ctl=new AbortController(); const to=setTimeout(()=>ctl.abort(),20000);
     const r=await fetch(S.llm.endpoint,{method:"POST",signal:ctl.signal,headers:{"Content-Type":"application/json","Authorization":"Bearer "+S.llm.key},
-      body:JSON.stringify({model:S.llm.model||"gpt-4o-mini",messages:[{role:"system",content:"You suggest extra sandbox authorization test ideas as short numbered lines. No exploit payloads, no production targets."},{role:"user",content:prompt}],max_tokens:300})});
+      body:JSON.stringify({model:S.llm.model,messages:[{role:"system",content:"You suggest extra sandbox authorization test ideas as short numbered lines. No exploit payloads, no production targets."},{role:"user",content:prompt}],max_tokens:300})});
     clearTimeout(to);
     const j=await r.json();
     const txt=j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content;
@@ -551,22 +582,38 @@ function renderLlmIdeas(){
 }
 function download(name,text){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type:"application/json"})); a.download=name; a.click(); }
 
+async function loadDemoModel(){
+  showStatus($("modelStatus"), "loading", "Loading the demo model…");
+  try{
+    $("modelText").value = await fetchText("samples/sample-testable-model.json");
+    showStatus($("modelStatus"), "success", "Demo model loaded. Next: PLAN TESTS.");
+  }catch(e){ showStatus($("modelStatus"), "error", `Could not load the demo model: ${e.message}`, { retry: loadDemoModel }); }
+}
+
 window.addEventListener("DOMContentLoaded",()=>{
-  $("demoModelBtn").onclick=async()=>{ const r=await fetch("samples/sample-testable-model.json"); $("modelText").value=await r.text(); };
+  $("demoModelBtn").onclick=loadDemoModel;
   $("fileBtn").onclick=()=>$("modelFile").click();
-  $("modelFile").addEventListener("change",e=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader(); rd.onload=()=>$("modelText").value=rd.result; rd.readAsText(f); });
+  $("modelFile").addEventListener("change",e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const rd=new FileReader();
+    showStatus($("modelStatus"), "loading", `Reading ${f.name}…`);
+    rd.onload=()=>{ $("modelText").value=rd.result; showStatus($("modelStatus"), "success", `Loaded ${f.name}. Next: PLAN TESTS.`); };
+    rd.onerror=()=>showStatus($("modelStatus"), "error", `Could not read ${f.name}: ${rd.error?rd.error.message:"unknown error"}`);
+    rd.readAsText(f);
+  });
   $("planBtn").onclick=()=>{
-    const txt=$("modelText").value.trim(); if(!txt){ alert("Paste model JSON or Load Demo Model."); return; }
-    try{ loadModel(JSON.parse(txt)); }catch(e){ alert("Bad model: "+e.message); return; }
-    S.execMode=$("execMode").value; S.mockMode=$("mockMode").value; S.sandboxUrl=$("sandboxUrl").value.trim()||S.sandboxUrl;
+    const txt=$("modelText").value.trim(); if(!txt){ showStatus($("modelStatus"), "empty", "No model yet: paste testable-security-model.json, upload it, or load the demo model."); return; }
+    try{ loadModel(JSON.parse(txt)); }catch(e){ showStatus($("modelStatus"), "error", `Invalid model: ${e.message}`); return; }
+    S.execMode=$("execMode").value; S.mockMode=$("mockMode").value; S.sandboxUrl=$("sandboxUrl").value.trim();
     S.auth.scheme=$("authScheme").value; S.auth.apiKeyName=$("apiKeyName").value.trim()||"X-API-Key"; S.auth.cookieName=$("cookieName").value.trim()||"session";
     planTests(); S.sel=S.tests[0]?S.tests[0].id:null;
     $("console").textContent=`planned ${S.tests.length} cases from ${S.model.laws.length} laws (${S.execMode}${S.execMode==="mock"?"-"+S.mockMode:""}).`;
     log(`planner: ${S.model.laws.length} laws → ${S.tests.length} cases (heuristic; all eligible endpoints)${(S.planWarnings||[]).length?" — "+S.planWarnings.join("; "):""}`);
     renderAll(); renderAuth();
+    showStatus($("modelStatus"), S.tests.length?"success":"empty", S.tests.length ? `Planned ${S.tests.length} test cases from ${S.model.laws.length} laws.` : "The model produced no test cases (no laws with eligible endpoints).");
   };
   $("execMode").onchange=e=>{ S.execMode=e.target.value; renderAll(); renderApproval(); };
-  $("mockMode").onchange=e=>S.mockMode=e.target.value;
+  $("mockMode").onchange=e=>{ S.mockMode=e.target.value; renderTargetBar(); };
   $("authScheme").onchange=e=>{ S.auth.scheme=e.target.value; renderAuth(); renderPreview(); };
   $("runAllBtn").onclick=runAll;
   $("resetBtn").onclick=()=>{ S.results={}; S.findings=[]; renderAll(); $("console").textContent="reset."; };
@@ -575,5 +622,9 @@ window.addEventListener("DOMContentLoaded",()=>{
   $("llmEnable").onchange=e=>{ S.llm.enabled=e.target.checked; };
   $("sandboxUrl").oninput=()=>{ S.sandboxUrl=$("sandboxUrl").value.trim(); renderApproval(); };
   $("dlEvidence").onclick=()=>download("evidence-package.json",JSON.stringify(evidencePackage(),null,2));
-  $("copyEvidence").onclick=()=>{ navigator.clipboard.writeText(JSON.stringify(evidencePackage(),null,2)); alert("Evidence package copied — paste into Part 3."); };
+  $("copyEvidence").onclick=async()=>{
+    try{ await copyText(JSON.stringify(evidencePackage(),null,2)); showStatus($("evidenceStatus"), "success", "Evidence package copied."); }
+    catch(e){ showStatus($("evidenceStatus"), "error", `Copy failed (${e.message}). Use Download instead.`); }
+  };
+  renderApproval();
 });

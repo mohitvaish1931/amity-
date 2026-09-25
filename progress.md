@@ -1,5 +1,93 @@
 # Progress
 
+## 2026-09-25: Product hardening: lazy graph, explorer, target guardrails, states, accessibility, theme (not committed)
+
+Scope: everything in the roadmap that does not need a server-side runtime. **Not built, by decision:** a backend executor, bundled vulnerable sandbox APIs, and a new evidence/confirmation lifecycle engine (the same scope declined earlier). Step 2's execution/confirmation logic therefore remains the prototype (docs/TEST_LAB.md), and nothing here claims otherwise.
+
+### Done (verified by running it)
+
+| Area | Change |
+|---|---|
+| Performance (Phase 8) | `src/twin/lazy.ts` loads React + React Flow with a dynamic `import()` on first render, shows a loading status, replays queued calls, and shows an error with Retry if the chunk fails. Step 1 is built as ES modules with code splitting. **Initial JS 589.4 KiB → 186.0 KiB**; the graph chunk (413.4 KiB) loads on BUILD. The E2E test proves the chunk is not requested before BUILD, is requested once after, and that the initial fit puts every node inside the canvas. `scripts/check-bundle.mjs` (budget 256 / 96 KiB, one lazy chunk) runs in `npm run check` and CI. |
+| Constitution Explorer (Phase 12, partial) | Filters (category / severity / confidence, options and counts from the data; text search over id, statement, invariant, scope and provenance) and "Export shown laws" as JSON or Markdown, labelled specification-derived, filter recorded, Markdown injection escaped (`src/constitution/explore.ts`). |
+| Target guardrails (Phase 6) | `src/target/policy.ts`: host classification on the parsed URL. Only loopback, private-network and reserved-name hosts can be registered; public, link-local (metadata) and unspecified hosts are refused, and so are query or fragment in a target URL. A `Target` is `environment: "sandbox"`, `authorizationStatus: "AUTHORIZED_BY_CONFIGURATION"`. Step 2 registration needs explicit confirmation, live requests go through `resolveRequestUrl` (origin + base-path containment), and `redirect: "error"` is set. Step 1 Test Connection follows the same policy (no credentials, redirects refused, Retry). |
+| Target bar (Phase 6/7) | Step 2 always shows TARGET · SANDBOX · AUTHORIZED BY CONFIGURATION (not independently verified) or NOT REGISTERED · MODE · RUN. |
+| States (Phase 11) | `src/ui/status.ts`. Every `alert()` in both apps was replaced by inline loading / success / empty / error states (errors: `role="alert"`), with Retry for failed demo loads. A denied clipboard is reported. |
+| Accessibility (Phase 10) | Every control labelled (labels associated, aria-labels for generated selects and credential inputs). The upload zone is a real button (the last inline `onclick` is gone). Test cards are keyboard-operable (`role=button`, Enter/Space, focus kept). Table headers are scoped, the console is a `role=log`, focus rings are visible, and reduced motion is respected. Automated audit in jsdom across states (`tests/apps/accessibility.test.ts`) plus E2E focus/layout checks. |
+| UI (Phase 7) | Shared restrained theme (`src/ui/theme.css`): navy/charcoal, one blue accent, colour only for state, no gradients. Step 2 workspace grid: tests · execution timeline + results · request inspector side by side from 1280 px, stacked below. |
+| Security review (Phase 16) | CSP on both pages (`script-src 'self'`, no inline scripts or handlers, `object-src`/`base-uri 'none'`). Static server path handling moved to `scripts/static-path.mjs`. `npm audit`: 0 vulnerabilities. Scans found no HTML sinks, storage use, `console.log`/`debugger` or secrets in production code. |
+| E2E (Phase 9, partial) | `e2e/step2.spec.ts` (7) and `e2e/layout.spec.ts` (10) added; Step 1 spec extended. 8 → 42 tests (21 per browser). |
+| CI (Phase 14) | Bundle budget step and summary row. The new suites run inside the existing `test:ci` and `test:e2e` steps. npm cache was already enabled. |
+| Docs (Phase 15) | Updated README, ARCHITECTURE, SANDBOX, SECURITY_MODEL, SECURITY_CONSTITUTION; new TEST_LAB, DEMO_GUIDE, DEVELOPMENT, THREAT_MODEL. REPOSITORY_AUDIT left as the historical record. |
+
+### Bugs found and fixed (each with a regression test; ✓ = negative control fails on the old code)
+
+| Bug | Fix |
+|---|---|
+| ✓ RUN ALL stayed disabled after a run finished (the last render happened while `running` was still true); the run state never showed completion | `finally { S.running=false; updateBtns(); }` in `runAll` and `runOne` |
+| ✓ Step 2 hypotheses rendered as "[object Object]" in cards, inspector and the LLM prompt (`Object.assign` argument order let the template object overwrite the text) | `{...o, hypothesis: text}` |
+| ✓ Mock runs' reasoning trail ended in "→ CONFIRMED" and said "sensitive data confirmed" | Mock wording: "SIMULATED (a live sandbox run would be needed to confirm)", "sensitive fields present in the simulated response" |
+| Page-wide horizontal scroll (2382 px) after BUILD: grid items with long `<pre>` lines | `.grid2 > * { min-width: 0 }` (E2E layout test) |
+| Horizontal scroll at phone width from long `<select>` options | `select { max-width: 100% }` (E2E layout test) |
+| Target URL normalization silently dropped a query or fragment, so a different URL than the one typed could be registered | Refused explicitly (`tests/target/policy.test.ts`) |
+| Local server: a malformed %-escape threw inside the request handler (crashing the server), and a prefix-sharing sibling such as `dist-old/` passed the containment check | `scripts/static-path.mjs`: 400 / 403 (`tests/ci/static-path.test.ts`) |
+| Demo loaders ignored failed fetches (unhandled rejection, silent); "Copy" claimed success before the clipboard write resolved | `fetchText` / `copyText` + inline states (`tests/apps/error-states.test.ts`) |
+
+### Verification (fresh `npm ci`)
+
+- `npm run check`: typecheck ✅ lint ✅ **370/370** (31 files) ✅ build ✅ bundle budget ✅
+- `npm run test:e2e`: **42/42** ✅ (Chrome 153 + Edge 153); CI mode (`CI=1 E2E_SKIP_BUILD=1`): **21/21** ✅, JUnit written
+- `npm audit`: 0 vulnerabilities
+- Manual check on the production build: demo → build → explorer filter; no console errors; no horizontal overflow at 1366 px; screenshots reviewed at 1366 and 1920 px.
+
+### Not done / limitations
+
+- Backend, persistence, run history, bundled local sandbox APIs, and an evidence/confirmation lifecycle engine: not built (see scope above).
+- PDF report export: not built (JSON and Markdown only).
+- Playwright's bundled Chromium (the CI channel) was not run locally; only the Chrome and Edge channels were. CI has not run these changes yet (not pushed).
+- Target names are classified by suffix, not DNS resolution; enforcement is browser-side.
+
+## 2026-09-25: Hardcoded-data audit: values derived from data, simulated results labelled (not committed)
+
+Scope: app-level values only. No runtime/network testing logic added. The engine (`src/`) already had no demo data.
+
+| Was hardcoded | Now |
+|---|---|
+| Step 1 inference scores (fixed 90/85/70…) | Each inference lists 3 evidence signals. Score = share of signals present. HIGH/MEDIUM/LOW come from an explicit rule per inference. The card shows ✅/❌ per signal. An analyst sensitivity override raises INF-03. |
+| Step 1 readiness (weighted formula) | A checklist of 6 checks, each with its own detail (e.g. "5/6 checks (83%)", "❌ A privileged role exists … (none configured)"). |
+| Step 1 default sandbox URL `https://sandbox-api.example.com` | Empty until the user types one, or Load Demo takes `servers[0]` from the loaded spec. An existing user URL is never overwritten. |
+| Step 1 fallback identity `actor_1`/`role_1` and object id `"1"` in the law preview | "(no identity configured)" and the unfilled path template. |
+| Step 2 finding confidence `98%`/`85%` | Shows the law's own confidence level (`law confidence HIGH`), with no invented percentage. |
+| Step 2 mock findings labelled CONFIRMED | Mock runs produce **SIMULATED** findings and result badges, and `simulated: true` in the evidence package. CONFIRMED is reserved for live runs. |
+| Step 2 LLM model default `gpt-4o-mini` | Required input, no default. |
+| Step 2 Plan Tests replaced a typed sandbox URL with the model's (audit BUG-11, still live) | The model URL fills the field only when it is empty. Planning uses exactly the field, so the target shown equals the target used. |
+| "Autonomous Lab" / "judge" copy | Neutral "Test Lab" wording. |
+
+### Verification
+
+- `npm run check`: typecheck ✅ lint ✅ **271/271** (20 files) ✅ build ✅ (Step 1 bundle 589.4 KiB, Step 2 41.8 KiB)
+- `npm run test:e2e`: **8/8** ✅
+- New `tests/apps/dynamic-data.test.ts` (7 tests). All 7 fail against the 231f408 app files (negative control).
+- `foundation-blockers.test.ts` updated for the empty initial URL, +1 test (demo keeps a user URL).
+- Manual check on the production build (`node scripts/serve.mjs`):
+  - Step 1: empty URL/UNKNOWN on load; demo fills it from the spec; 6/6 readiness; INF-03 MEDIUM 67%; 30 nodes, 7 laws.
+  - Step 2 mock run: 22 tests, 10 findings, all SIMULATED, no CONFIRMED, no %.
+  - No console errors on either page.
+- `2-test-lab/samples/sample-testable-model.json` regenerated. Only `inferences` changed.
+
+### Still remaining (not hardcoding)
+
+- Step 2 execution/confirmation is still the browser prototype (audit BUG-01…08, BUG-10, SEC-01/02/04/05).
+- Labelled heuristics remain:
+  - admin role detected by name;
+  - permission text matching;
+  - name-based sensitivity.
+- Documented constants remain:
+  - AUTHN probe cap of 15 endpoints;
+  - placeholder `1` for anonymous probes;
+  - mock response bodies (`<field>_value`), now labelled SIMULATED.
+- Step 1 bundle ~589 KiB (lazy loading pending). E2E covers Step 1 only.
+
 ## 2026-09-24: CI runs Playwright E2E (committed, not pushed; not yet run on GitHub)
 
 Scope: CI and browser QA only.
@@ -261,15 +349,15 @@ Scope: parser hardening, XSS safety, test infrastructure, typed contracts, docs.
 
 ## Open items / remaining blockers
 
-1. **Step 2 execution and findings are still the prototype.** It runs in the browser, approval is client-side only, confirmation repeats only the last request and compares status codes only, mock findings are labelled CONFIRMED, and HTTP 200 alone is treated as exposure (audit BUG-01…08, BUG-10, BUG-11, SEC-01, SEC-02, SEC-04, SEC-05). Not touched in this phase by design.
+1. **Step 2 execution and findings are still the prototype.** It runs in the browser, target registration is client-side only (now restricted to loopback/private/reserved hosts, with request-scope checks), confirmation repeats only the last request and compares status codes only, and HTTP 200 alone is treated as exposure (audit BUG-01…08, BUG-10, SEC-01, SEC-02, SEC-04, SEC-05). Not touched in this phase by design.
 2. ~~Step 2 `fillPath` still fills only the first path parameter (BUG-09, step 2 part).~~ Fixed in "Small foundation blockers".
 3. Step 2 has not adopted the typed contracts (`TestCase`, `TestResult`, `Finding`, `Evidence`). Only rendering was migrated.
 4. External `$ref` (remote/file) is not supported: it produces a warning.
 5. ~~Step 1 still shows a static "🟢 Authorized Sandbox" label regardless of state.~~ Fixed in "Small foundation blockers"; Step 2's banner aligned in "Sandbox policy messaging aligned". (Step 2's live-run approval checkbox is separate and unchanged.)
-5a. No end-to-end browser automation (Playwright) yet; graph pointer interactions were verified manually.
-6. No backend, persistence or Docker files yet. (CI workflow added in "CI foundation"; not yet run on GitHub.)
+5a. ~~No end-to-end browser automation (Playwright) yet.~~ Playwright covers Step 1, Step 2 and layout (42 tests).
+6. No backend, persistence or Docker files yet. (CI runs on GitHub and was green at 231f408.)
 7. Planning docs from the audit (`docs/TARGET_ARCHITECTURE.md`, `docs/FULL_IMPLEMENTATION_PLAN.md`) were not produced.
 
 ## Next suggested phase
 
-Replace step 2's analyzer and finding logic with the typed contracts: explicit finding states, `simulated` results that can never be CONFIRMED, dedupe, and schema-driven request bodies from the new parser. This is still static and unit-testable.
+Commit and push this phase, then confirm CI (including Playwright's bundled Chromium) is green. Then: Step 2 adopting the typed contracts (`TestCase`, `TestResult`, `Finding`) for static planning and labelling, and schema-driven request bodies from the parser.

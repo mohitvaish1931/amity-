@@ -18,7 +18,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "sample:regen": "node scripts/regen-sample.mjs",
-    "check": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "check": "npm run typecheck && npm run lint && npm run test && npm run build && npm run check:bundle",
+    "check:bundle": "node scripts/check-bundle.mjs"
   },
   "dependencies": {
     "@xyflow/react": "12.12.0",

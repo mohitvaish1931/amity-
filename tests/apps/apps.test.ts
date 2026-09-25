@@ -41,7 +41,11 @@ describe("Step 1 app (1-security-twin) still works end to end", () => {
     await app.settle();
     app.setValue("swaggerText", '{"openapi": "3.0.0", "paths": ');
     app.click("buildBtn");
-    expect(app.alerts.join("\n")).toMatch(/Invalid spec:\nInvalid JSON/);
+    const status = app.$("buildStatus");
+    expect(status.getAttribute("role")).toBe("alert");
+    expect(status.textContent).toMatch(/Invalid spec: nothing was built\./);
+    expect(status.querySelector(".status-details")!.textContent).toMatch(/Invalid JSON/);
+    expect(app.alerts).toEqual([]);
   });
 
   it("applies sensitivity overrides without duplicating warnings on rebuild", async () => {

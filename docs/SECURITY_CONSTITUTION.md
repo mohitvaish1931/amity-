@@ -118,3 +118,11 @@ With the demo spec and configuration, the engine derives 7 laws:
 - Sensitivity comes from a name heuristic unless an analyst overrides it. Data-exposure laws only reach HIGH with an override.
 - State-transition laws cannot know the allowed transitions (OpenAPI has no way to express them). The test strategy asks for them as a precondition.
 - Test strategies are not executed in this phase.
+
+## Constitution Explorer and export
+
+Step 1's Constitution panel has an explorer (`src/constitution/explore.ts`):
+
+- **Filters** by category, severity and confidence. The options are generated from the laws actually present, with counts. There is also a text search over id, statement, invariant, scope entries and provenance references. Non-matching law cards are hidden, not re-rendered, so open cards stay open. Filters survive a rebuild when the value still exists.
+- **Export shown laws** as JSON (`sentinel-x-constitution-export-v1`) or Markdown. Exports contain exactly the laws currently shown, record the filter and the total, and state `basis: "specification"` with the disclaimer that no test was executed and no law is a confirmed vulnerability.
+- Spec-supplied text is escaped in Markdown, so resource or field names cannot inject links, HTML or table cells.

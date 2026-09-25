@@ -29,7 +29,9 @@ function expectOnlyLocalAssets(requests: string[], baseURL: string) {
     `${origin}${APP}samples/sample-swagger.json`,
     `${origin}${APP}samples/sample-config.json`,
   ]);
-  const unexpected = requests.filter((u) => !u.startsWith("data:") && !allowed.has(u));
+  // Code-split chunks of the app itself (the lazily loaded Security Twin graph).
+  const isAppChunk = (u: string) => u.startsWith(`${origin}${APP}chunks/`) && u.endsWith(".js");
+  const unexpected = requests.filter((u) => !u.startsWith("data:") && !allowed.has(u) && !isAppChunk(u));
   expect(unexpected, "unexpected network requests").toEqual([]);
 }
 
@@ -54,12 +56,28 @@ test.describe("Step 1: demo model", () => {
     await page.goto(APP);
     await page.getByRole("button", { name: "Load Demo Swagger + Config" }).click();
     await expect(page.locator("#swaggerText")).not.toBeEmpty();
+    // The graph code (React Flow) is lazy-loaded: nothing of it is downloaded before BUILD.
+    const graphChunk = (u: string) => /\/chunks\/mount-[\w-]+\.js$/.test(u);
+    expect(seen.requests.filter(graphChunk)).toEqual([]);
     await page.getByRole("button", { name: "[ BUILD SECURITY TWIN ]" }).click();
 
     // 4–6. graph appears with exactly the model's nodes and edges
     const graph = page.getByTestId("twin-graph");
     await expect(graph).toBeVisible();
+    expect(seen.requests.filter(graphChunk)).toHaveLength(1);
     await expect(nodes(page)).toHaveCount(expected.graph.nodes.length);
+    // The initial fit works with the lazily mounted graph: every node lies inside the visible canvas.
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const c = document.querySelector(".twin-canvas")!.getBoundingClientRect();
+          return [...document.querySelectorAll('[data-testid="twin-node"]')].filter((n) => {
+            const r = n.getBoundingClientRect();
+            return r.left < c.left - 1 || r.right > c.right + 1 || r.top < c.top - 1 || r.bottom > c.bottom + 1;
+          }).length;
+        }),
+      )
+      .toBe(0);
     await expect(edges(page)).toHaveCount(expected.graph.edges.length);
     for (const type of ["identity", "role", "endpoint", "resource", "field", "law"] as const) {
       await expect(page.locator(`[data-testid="twin-node"][data-node-type="${type}"]`)).toHaveCount(expected.graph.nodes.filter((n) => n.type === type).length);
@@ -157,15 +175,17 @@ test.describe("Step 1: regression states", () => {
     const { config } = demoInput();
     await page.goto(APP);
     await fillConfig(page, '{"openapi": "3.0.0", "paths": ', config);
-    // alert() blocks the page, so the handler must be in place before the click.
-    const messages: string[] = [];
+    // The error is shown inline (role="alert"), never as a blocking dialog.
+    const dialogs: string[] = [];
     page.on("dialog", async (d) => {
-      messages.push(d.message());
-      await d.accept();
+      dialogs.push(d.message());
+      await d.dismiss();
     });
     await page.getByRole("button", { name: "[ BUILD SECURITY TWIN ]" }).click();
-    await expect.poll(() => messages.length).toBe(1);
-    expect(messages[0]).toMatch(/^Invalid spec:\nInvalid JSON/);
+    const error = page.getByRole("alert").filter({ hasText: "Invalid spec" });
+    await expect(error).toContainText("Invalid spec: nothing was built.");
+    await expect(error).toContainText("Invalid JSON");
+    expect(dialogs).toEqual([]);
     await expect(nodes(page)).toHaveCount(0);
     await expect(page.locator("#twinGraph")).toContainText("Click BUILD SECURITY TWIN");
     await expect(page.getByTestId("law-card")).toHaveCount(0);

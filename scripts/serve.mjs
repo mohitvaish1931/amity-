@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { ROOT } from "./app-harness.mjs";
+import { resolveStaticPath } from "./static-path.mjs";
 
 const DIST = path.join(ROOT, "dist");
 const PORT = Number(process.env.PORT || 8000);
@@ -14,12 +15,12 @@ if (!existsSync(DIST)) {
 }
 
 createServer((req, res) => {
-  const urlPath = decodeURIComponent(new URL(req.url || "/", "http://localhost").pathname);
-  let file = path.normalize(path.join(DIST, urlPath));
-  if (!file.startsWith(DIST)) {
-    res.writeHead(403).end("forbidden");
+  const resolved = resolveStaticPath(DIST, req.url);
+  if (!resolved.ok) {
+    res.writeHead(resolved.status).end(resolved.status === 400 ? "bad request" : "forbidden");
     return;
   }
+  let file = resolved.file;
   if (existsSync(file) && statSync(file).isDirectory()) file = path.join(file, "index.html");
   if (!existsSync(file)) {
     res.writeHead(404).end("not found");

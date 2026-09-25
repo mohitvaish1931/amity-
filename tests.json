@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "updated": "2026-09-24",
-  "phase": "ci-playwright-e2e",
+  "updated": "2026-09-25",
+  "phase": "product-hardening",
   "commands": {
     "install": {
       "cmd": "npm ci",
       "result": "pass",
-      "notes": "npm ci verified with npm 11 (local) and npm 10 (as bundled with Node 22 on GitHub); 0 vulnerabilities"
+      "notes": "fresh npm ci on 2026-09-25: 0 vulnerabilities"
     },
     "typecheck": {
       "cmd": "npm run typecheck",
@@ -19,37 +19,41 @@
     "test": {
       "cmd": "npm test",
       "result": "pass",
-      "total": 263,
-      "passed": 263,
+      "total": 370,
+      "passed": 370,
       "failed": 0,
-      "notes": "passed 3 consecutive runs after the flaky-test fix"
+      "notes": "31 files"
     },
     "build": {
       "cmd": "npm run build",
       "result": "pass",
       "outputs": [
-        "dist/1-security-twin/app.js",
-        "dist/1-security-twin/app.css",
-        "dist/2-test-lab/app.js"
-      ]
+        "dist/1-security-twin/app.js (186.0 KiB, ES module entry)",
+        "dist/1-security-twin/chunks/mount-*.js (413.4 KiB, loaded on demand)",
+        "dist/1-security-twin/chunks/chunk-*.js (0.7 KiB, shared)",
+        "dist/1-security-twin/app.css (26.4 KiB)",
+        "dist/2-test-lab/app.js (48.6 KiB)",
+        "dist/2-test-lab/app.css (6.5 KiB)"
+      ],
+      "before": "dist/1-security-twin/app.js 589.4 KiB (single bundle, graph loaded eagerly)"
     },
     "manualBrowserCheck": {
-      "cmd": "node scripts/serve.mjs (after npm run build)",
+      "cmd": "node scripts/serve.mjs (after npm run build) + Playwright screenshots",
       "result": "pass",
-      "notes": "Constitution panel: 7 laws with statement, machine rule, scope, provenance, confidence signals, test strategy; dashboard 3H/2M/2L; real click on \"Highlight scope in graph\" (LAW-003) focuses the card, scrolls to the graph and highlights exactly the law scope (22 nodes dimmed); network log shows only 6 local requests; no console errors."
+      "notes": "Step 1 demo -> build -> explorer filter (Showing 2 of 7 laws), graph chunk loaded only after BUILD, no console errors, horizontal overflow 0 at 1366 px after the grid fix; screenshots at 1366 (graph, explorer) and 1920 (Step 2 workspace) reviewed and led to the [object Object] and mock-CONFIRMED-wording fixes"
     },
     "testCi": {
       "cmd": "npm run test:ci",
       "result": "pass",
-      "total": 263,
-      "passed": 263,
+      "total": 370,
+      "passed": 370,
       "failed": 0,
       "notes": "writes reports/junit.xml; GitHub annotations verified with a throwaway failing test (::error with file/line, exit 1)"
     },
     "check": {
       "cmd": "npm run check",
       "result": "pass",
-      "notes": "typecheck -> lint -> test -> build"
+      "notes": "typecheck -> lint -> test -> build -> check:bundle"
     },
     "githubActions": {
       "workflow": ".github/workflows/ci.yml",
@@ -84,9 +88,23 @@
           "result": "failure",
           "failedStep": "Test",
           "cause": "flaky jsdom test: fixed 30 ms wait for an asynchronous React render (constitution-panel.test.ts); fixed with waitFor polling"
+        },
+        {
+          "id": 36074962260,
+          "commit": "231f408",
+          "result": "success",
+          "steps": [
+            "npm ci",
+            "typecheck",
+            "lint",
+            "test",
+            "build",
+            "install Playwright Chromium",
+            "e2e"
+          ]
         }
       ],
-      "nextRun": "E2E-in-CI not yet run on GitHub (commit not pushed)",
+      "nextRun": "product-hardening changes not yet committed/pushed",
       "fixCommit": "99775ec (esbuild 0.25.12 -> 0.28.2)",
       "pipeline": [
         "npm ci",
@@ -94,6 +112,7 @@
         "lint",
         "test",
         "build",
+        "bundle budget",
         "install Playwright Chromium",
         "e2e (Playwright, chromium, reuses build)"
       ]
@@ -106,28 +125,46 @@
         "Google Chrome 153.0.8010.53 (channel chrome)",
         "Microsoft Edge 153.0.4234.48 (channel msedge)"
       ],
-      "total": 8,
-      "passed": 8,
+      "total": 42,
+      "passed": 42,
       "failed": 0,
       "flaky": 0,
       "server": "scripts/e2e-server.mjs on 127.0.0.1:4178 (build + serve, one process); port free and no leftover process after runs",
-      "file": "e2e/step1.spec.ts",
       "tests": [
-        "demo flow: graph node/edge counts from model, node detail panel, law statement/invariant/confidence/provenance, highlight scope == lawHighlight(), unrelated nodes dimmed, no console errors, local assets only",
-        "empty model",
-        "non-demo model (marketplace fixture)",
-        "invalid model error state"
+        "Step 1: demo flow incl. lazy graph chunk (not requested before BUILD, once after) and initial fit inside the canvas; empty, non-demo and invalid models (inline error, no dialog)",
+        "Step 2: plan + keyboard selection; mock run labelled SIMULATED (never CONFIRMED, no %); refused targets (public host, metadata IP, invalid URL); live run blocked for an unregistered URL (no requests); live run against a registered loopback target with requests aborted in-browser (origin-contained, ERROR, no findings)",
+        "Layout: no horizontal scroll at 390/1280/1366/1920 px in populated states; visible focus outline; 3-column Step 2 workspace on wide screens, stacked below"
       ],
       "ciMode": {
-        "cmd": "CI=1 E2E_SKIP_BUILD=1 npm run test:e2e",
+        "cmd": "CI=1 E2E_SKIP_BUILD=1 PW_CHANNELS=chrome npx playwright test",
         "result": "pass",
-        "total": 8,
-        "passed": 8,
+        "total": 21,
+        "passed": 21,
         "outputs": [
           "reports/e2e-junit.xml",
           "playwright-report/index.html"
-        ]
-      }
+        ],
+        "notes": "bundled Chromium channel (used by GitHub CI) not run locally"
+      },
+      "files": [
+        "e2e/step1.spec.ts",
+        "e2e/step2.spec.ts",
+        "e2e/layout.spec.ts"
+      ]
+    },
+    "bundleBudget": {
+      "cmd": "npm run check:bundle",
+      "result": "pass",
+      "budgets": {
+        "1-security-twin/app.js": "256 KiB",
+        "2-test-lab/app.js": "96 KiB"
+      },
+      "notes": "exactly one lazily imported graph chunk required"
+    },
+    "audit": {
+      "cmd": "npm audit",
+      "result": "pass",
+      "vulnerabilities": 0
     }
   },
   "fixtures": {
@@ -336,10 +373,10 @@
     {
       "file": "tests/apps/xss.test.ts",
       "area": "XSS regression (real bundles in jsdom)",
-      "tests": 10,
+      "tests": 12,
       "status": "pass",
       "negativeControl": "8 of 10 fail against the pre-hardening app.js files (verified 2026-09-24)",
-      "notes": "React Flow draws its own <svg> inside .react-flow; the injection check excludes only those."
+      "notes": "now also asserts zero inline handlers and the CSP"
     },
     {
       "file": "tests/apps/apps.test.ts",
@@ -442,14 +479,47 @@
     {
       "file": "tests/apps/foundation-blockers.test.ts",
       "area": "Step 1 target state + Step 2 policy messaging + Step 2 multi-param planning (real bundles)",
+      "tests": 10,
+      "status": "pass",
+      "negativeControl": "6 of 7 original tests fail against a51948a (demo-preservation test passes on both by design); the 2 policy-messaging tests fail against the previous Step 2 banner",
+      "notes": "initial state now expects an empty URL (no built-in target); demo takes servers[0] from the spec; new test: demo does not overwrite a user URL"
+    },
+    {
+      "file": "tests/apps/dynamic-data.test.ts",
+      "area": "no hardcoded values; SIMULATED labelling incl. reasoning trail; hypotheses as text; BUG-11",
       "tests": 9,
       "status": "pass",
-      "negativeControl": "6 of 7 original tests fail against a51948a (demo-preservation test passes on both by design); the 2 policy-messaging tests fail against the previous Step 2 banner"
+      "negativeControl": "all fail against the 231f408 app files"
+    },
+    {
+      "file": "tests/apps/target-guardrails.test.ts",
+      "area": "Step 2 target bar, registration refusals/confirmation, run-state completion, live-request scope + redirect refusal, Step 1 connection check",
+      "tests": 14,
+      "status": "pass",
+      "negativeControl": "run-state test fails with the old finally block"
+    },
+    {
+      "file": "tests/apps/error-states.test.ts",
+      "area": "loading/success/empty/error/retry in both apps; clipboard failure",
+      "tests": 8,
+      "status": "pass"
+    },
+    {
+      "file": "tests/apps/accessibility.test.ts",
+      "area": "named controls/buttons, unique ids, scoped th, no inline handlers, keyboard-operable test cards (initial, built, filtered, planned, run states)",
+      "tests": 4,
+      "status": "pass"
+    },
+    {
+      "file": "tests/apps/constitution-explorer.test.ts",
+      "area": "explorer filters from data, filtering, persistence across rebuild, exports of shown laws",
+      "tests": 5,
+      "status": "pass"
     },
     {
       "file": "tests/ci/workflow.test.ts",
       "area": "CI configuration invariants",
-      "tests": 11,
+      "tests": 12,
       "status": "pass",
       "covers": [
         "push + pull_request triggers",
@@ -509,6 +579,48 @@
         "non-demo model",
         "export carries constitution + legacy laws"
       ]
+    },
+    {
+      "file": "tests/constitution/explore.test.ts",
+      "area": "filterLaws, JSON/Markdown export, Markdown/HTML escaping",
+      "tests": 8,
+      "status": "pass"
+    },
+    {
+      "file": "tests/target/policy.test.ts",
+      "area": "host classification, registration, request-scope guard",
+      "tests": 37,
+      "status": "pass"
+    },
+    {
+      "file": "tests/twin/lazy.test.ts",
+      "area": "lazy graph loader: idle, queue/replay, error + retry",
+      "tests": 4,
+      "status": "pass"
+    },
+    {
+      "file": "tests/ui/status.test.ts",
+      "area": "status roles, escaping, retry, fetchText, copyText",
+      "tests": 5,
+      "status": "pass"
+    },
+    {
+      "file": "tests/ci/code-splitting.test.ts",
+      "area": "React Flow out of the entry; one dynamic graph chunk; module script",
+      "tests": 2,
+      "status": "pass"
+    },
+    {
+      "file": "tests/ci/bundle-budget.test.ts",
+      "area": "budget pass/fail cases",
+      "tests": 4,
+      "status": "pass"
+    },
+    {
+      "file": "tests/ci/static-path.test.ts",
+      "area": "static server containment, 400 on undecodable paths",
+      "tests": 3,
+      "status": "pass"
     }
   ],
   "auditIssues": [
@@ -588,9 +700,25 @@
       "test": "tests/apps/xss.test.ts"
     },
     {
-      "id": "BUG-01..08, BUG-10, BUG-11, SEC-01, SEC-02, SEC-04, SEC-05",
+      "id": "BUG-11",
+      "status": "fixed",
+      "test": "tests/apps/dynamic-data.test.ts"
+    },
+    {
+      "id": "SEC (static server)",
+      "status": "fixed",
+      "test": "tests/ci/static-path.test.ts",
+      "notes": "found in the 2026-09-25 review"
+    },
+    {
+      "id": "UI state bugs (run state, [object Object], mock CONFIRMED wording, overflow)",
+      "status": "fixed",
+      "test": "tests/apps/target-guardrails.test.ts, tests/apps/dynamic-data.test.ts, e2e/layout.spec.ts"
+    },
+    {
+      "id": "BUG-01..08, BUG-10, SEC-01, SEC-02, SEC-04, SEC-05",
       "status": "open",
-      "notes": "step 2 execution/finding logic, out of scope for this phase"
+      "notes": "Step 2 execution/confirmation is still the prototype (browser-side, weak confirmation). Live runs are now limited to registered loopback/private/reserved targets with request-scope checks; mock output is SIMULATED everywhere."
     }
   ]
 }

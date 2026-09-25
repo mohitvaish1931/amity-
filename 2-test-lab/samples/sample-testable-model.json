@@ -1483,15 +1483,32 @@
   "inferences": [
     {
       "id": "INF-01",
-      "claim": "ID-parameterised reads are BOLA candidates",
+      "claim": "ID-parameterised endpoints are object-authorization candidates",
       "evidence": [
         "EP-001 GET /users/{id}",
         "EP-002 GET /orders/{id}",
         "EP-004 GET /orders/{id}/invoice"
       ],
+      "signals": [
+        {
+          "id": "id-endpoints",
+          "description": "3 endpoint(s) take an object identifier",
+          "present": true
+        },
+        {
+          "id": "ownership-field",
+          "description": "ownership field on Order",
+          "present": true
+        },
+        {
+          "id": "two-owners",
+          "description": "2 configured owner identities",
+          "present": true
+        }
+      ],
+      "score": 100,
       "confidence": "HIGH",
-      "score": 90,
-      "needed": "Sandbox proof: cross-owner GET must DENY (owners: 101→User A; 102→User B; 103→User A)"
+      "needed": "Runtime proof that cross-owner access is denied"
     },
     {
       "id": "INF-02",
@@ -1499,39 +1516,107 @@
       "evidence": [
         "Order.customerId + map 101→User A; 102→User B; 103→User A"
       ],
+      "signals": [
+        {
+          "id": "ownership-field",
+          "description": "ownership field in the schema",
+          "present": true
+        },
+        {
+          "id": "ownership-map",
+          "description": "3 object(s) in the ownership map",
+          "present": true
+        },
+        {
+          "id": "owners-known",
+          "description": "every owner is a configured identity",
+          "present": true
+        }
+      ],
+      "score": 100,
       "confidence": "HIGH",
-      "score": 90,
-      "needed": "Confirm owner(o) at runtime; if mismatch, law stays candidate"
+      "needed": "Confirm owner(o) at runtime; until then laws stay hypotheses"
     },
     {
       "id": "INF-03",
       "claim": "Private/sensitive fields identified",
       "evidence": [
-        "8 PERSONAL/SENSITIVE fields (including nested and array fields)"
+        "8 PERSONAL/SENSITIVE field(s), including nested and array fields"
       ],
+      "signals": [
+        {
+          "id": "found",
+          "description": "8 field(s) classified",
+          "present": true
+        },
+        {
+          "id": "secret-level",
+          "description": "at least one SENSITIVE (credential/payment/secret) field",
+          "present": true
+        },
+        {
+          "id": "analyst",
+          "description": "an analyst confirmed a classification",
+          "present": false
+        }
+      ],
+      "score": 67,
       "confidence": "MEDIUM",
-      "score": 60,
-      "needed": "Runtime check: does foreign GET leak them? If yes → vuln, else RISK only"
+      "needed": "Analyst review of the name-based classification; runtime check that other identities cannot read them"
     },
     {
       "id": "INF-04",
-      "claim": "Auth boundary mapped",
+      "claim": "Authentication boundary mapped",
       "evidence": [
         "5 protected, 0 open"
       ],
+      "signals": [
+        {
+          "id": "endpoints",
+          "description": "5 endpoint(s)",
+          "present": true
+        },
+        {
+          "id": "declared",
+          "description": "every endpoint declares its security",
+          "present": true
+        },
+        {
+          "id": "schemes",
+          "description": "every referenced scheme is declared",
+          "present": true
+        }
+      ],
+      "score": 100,
       "confidence": "HIGH",
-      "score": 90,
-      "needed": "Anonymous probe in Part 2 to confirm 401/403"
+      "needed": "Anonymous requests in Part 2 to confirm 401/403"
     },
     {
       "id": "INF-05",
       "claim": "Admin role boundary exists",
       "evidence": [
-        "1 admin endpoints, admin role='Administrator', roles=[Customer, Administrator]"
+        "1 admin endpoint(s), admin role 'Administrator', roles [Customer, Administrator]"
       ],
+      "signals": [
+        {
+          "id": "admin-endpoints",
+          "description": "1 administrative endpoint(s)",
+          "present": true
+        },
+        {
+          "id": "privileged-role",
+          "description": "privileged role 'Administrator' (name heuristic)",
+          "present": true
+        },
+        {
+          "id": "other-roles",
+          "description": "1 non-privileged role(s)",
+          "present": true
+        }
+      ],
+      "score": 100,
       "confidence": "HIGH",
-      "score": 90,
-      "needed": "Non-admin (Customer) invoking admin endpoints must DENY"
+      "needed": "Non-admin roles (Customer) must be denied on admin endpoints"
     }
   ],
   "expectedBehavior": [

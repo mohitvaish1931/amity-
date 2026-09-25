@@ -88,7 +88,8 @@ describe("Step 1 renders crafted spec and config content as text", () => {
   it("creates no injected elements or event-handler attributes", async () => {
     app = await buildCrafted();
     expect(injectedElements(app.document)).toEqual([]);
-    expect(handlerElements(app.document)).toEqual(["div.drop"]);
+    // The page has no inline event-handler attributes at all (the upload zone is a real button).
+    expect(handlerElements(app.document)).toEqual([]);
     expect(app.document.querySelectorAll("[autofocus]").length).toBe(0);
   });
 
@@ -97,7 +98,8 @@ describe("Step 1 renders crafted spec and config content as text", () => {
     const select = [...app.document.querySelectorAll<HTMLSelectElement>("#sensTable select")].find((s) => s.dataset.f === ATTR_BREAKOUT);
     expect(select).toBeDefined();
     expect(select!.dataset.f).toBe(ATTR_BREAKOUT);
-    expect(select!.getAttributeNames().sort()).toEqual(["data-f", "data-r"]);
+    expect(select!.getAttributeNames().sort()).toEqual(["aria-label", "data-f", "data-r"]);
+    expect(select!.getAttribute("aria-label")).toContain(ATTR_BREAKOUT);
   });
 
   it("never executes injected handlers, even when elements receive focus", async () => {
@@ -145,7 +147,7 @@ describe("Step 2 renders crafted model content as text", () => {
     expect(app.document.querySelectorAll("[autofocus]").length).toBe(0);
     const credInputs = [...app.document.querySelectorAll<HTMLInputElement>("#authBox input[data-cred]")];
     expect(credInputs.map((i) => i.dataset.cred)).toContain(ATTR_BREAKOUT);
-    for (const i of credInputs) expect(i.getAttributeNames().sort()).toEqual(["data-cred", "placeholder", "style", "type"]);
+    for (const i of credInputs) expect(i.getAttributeNames().sort()).toEqual(["aria-label", "data-cred", "placeholder", "style", "type"]);
   });
 
   it("never executes injected handlers, even when elements receive focus", async () => {
@@ -177,4 +179,21 @@ describe("static guard", () => {
     expect(src).not.toMatch(/\.outerHTML\s*=/);
     expect(src).not.toMatch(/insertAdjacentHTML|document\.write/);
   });
+});
+
+describe("Content-Security-Policy", () => {
+  for (const page of ["1-security-twin/index.html", "2-test-lab/index.html"]) {
+    it(`${page} only runs scripts from its own origin`, () => {
+      const html = readRepoFile(page);
+      const csp = /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(html)?.[1];
+      expect(csp).toBeDefined();
+      const directives = Object.fromEntries(csp!.split(";").map((d) => d.trim().split(/\s+/)).map(([k, ...v]) => [k, v]));
+      expect(directives["script-src"]).toEqual(["'self'"]);
+      expect(directives["object-src"]).toEqual(["'none'"]);
+      expect(directives["base-uri"]).toEqual(["'none'"]);
+      // No inline scripts or inline event handlers anywhere in the page source.
+      expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/);
+      expect(html).not.toMatch(/\son[a-z]+=/i);
+    });
+  }
 });

@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Scripts only from this origin (no inline script); connect-src stays open to http(s) because the user supplies the sandbox (and optional LLM) URL, which the target policy in src/target/policy.ts then restricts. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http: https:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Sentinel X Lab — Part 1: Security Twin</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="app.css">
-<style>.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:10px}.tile{background:#020617;border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}.tile b{font-size:20px;display:block}.bar{height:8px;background:#1f2937;border-radius:6px;overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;background:linear-gradient(90deg,#06b6d4,#22c55e)}select{background:#020617;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:6px}</style>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="sandbox-banner">🛡 POLICY: use only sandbox targets you are authorized to test · production testing is prohibited</div>
@@ -16,20 +17,21 @@
 <div class="steps"><span class="step" id="s1">1 Connect</span><span class="step" id="s2">2 Discovery</span><span class="step" id="s3">3 Model</span><span class="step" id="s4">4 Twin</span><span class="step" id="s5">5 Constitution</span></div>
 </header>
 
-<div class="card"><h2>1️⃣ Connect Screen</h2><p class="sub">First screen the judge sees.</p>
-<label>OpenAPI 3.x / Swagger 2.0 — upload a JSON or YAML spec, or paste below</label>
-<div class="drop" onclick="document.getElementById('fileInput').click()">📄 Upload spec (.json / .yaml / .yml) <input type="file" id="fileInput" accept=".json,.yaml,.yml" hidden></div>
+<div class="card"><h2>1️⃣ Connect Screen</h2><p class="sub">Provide the OpenAPI spec and your configuration (identities, permissions, ownership).</p>
+<label for="swaggerText">OpenAPI 3.x / Swagger 2.0 — upload a JSON or YAML spec, or paste below</label>
+<button type="button" class="drop" id="uploadBtn">📄 Upload spec (.json / .yaml / .yml)</button><input type="file" id="fileInput" accept=".json,.yaml,.yml" hidden aria-label="OpenAPI spec file">
 <textarea id="swaggerText" placeholder='Paste OpenAPI/Swagger JSON or YAML here, or click "Load Demo Swagger"'></textarea>
-<div class="row"><button class="ghost" id="demoBtn">Load Demo Swagger + Config</button><span class="sub">Demo spec + demo configuration (identities, permissions, ownership). Replace with your own to prove data-driven.</span></div>
-<label>Sandbox Base URL</label><input type="text" id="baseUrl" value="https://sandbox-api.example.com">
-<div class="row" style="margin-top:8px"><button class="ghost" id="testBtn">Test Connection (safe GET)</button><span class="sub" id="sandboxStatus">Not tested.</span></div>
-<label>Configuration — identities (JSON array)</label><textarea id="identitiesEditor" style="min-height:70px" placeholder='[{"name":"...","role":"...","id":"..."}] — or Load Demo'></textarea>
-<label>Configuration — permissions (JSON: role → action → bool)</label><textarea id="permissionsEditor" style="min-height:70px" placeholder='{"RoleA":{"Action":true}} — or Load Demo'></textarea>
-<label>Configuration — ownership (JSON: objectId → ownerId)</label><textarea id="ownershipEditor" style="min-height:60px" placeholder='{"obj_1":"owner_id_1"} — or Load Demo'></textarea>
-<label>Configured identities</label>
-<div class="row" id="identityChips"><span class="sub">Load Demo or paste config.</span></div>
+<div class="row"><button class="ghost" type="button" id="demoBtn">Load Demo Swagger + Config</button><span class="sub">Demo spec + demo configuration (identities, permissions, ownership). Replace with your own to prove data-driven.</span></div>
+<label for="baseUrl">Sandbox Base URL</label><input type="text" id="baseUrl" placeholder="https://your-authorized-sandbox.example (Load Demo fills it from the spec's servers)">
+<div class="row" style="margin-top:8px"><button class="ghost" type="button" id="testBtn">Test Connection (safe GET)</button><span class="sub" id="sandboxStatus" role="status" aria-live="polite">Not tested.</span></div>
+<label for="identitiesEditor">Configuration — identities (JSON array)</label><textarea id="identitiesEditor" style="min-height:70px" placeholder='[{"name":"...","role":"...","id":"..."}] — or Load Demo'></textarea>
+<label for="permissionsEditor">Configuration — permissions (JSON: role → action → bool)</label><textarea id="permissionsEditor" style="min-height:70px" placeholder='{"RoleA":{"Action":true}} — or Load Demo'></textarea>
+<label for="ownershipEditor">Configuration — ownership (JSON: objectId → ownerId)</label><textarea id="ownershipEditor" style="min-height:60px" placeholder='{"obj_1":"owner_id_1"} — or Load Demo'></textarea>
+<p class="field-label" id="identityChipsLabel">Configured identities</p>
+<div class="row" id="identityChips" aria-labelledby="identityChipsLabel"><span class="sub">Load Demo or paste config.</span></div>
 <div class="row" id="targetAuthState" data-state="UNKNOWN"><span class="sub">Authorization status unknown.</span></div>
-<button class="primary" id="buildBtn">[ BUILD SECURITY TWIN ]</button>
+<button class="primary" type="button" id="buildBtn">[ BUILD SECURITY TWIN ]</button>
+<div class="op-status" id="buildStatus" role="status" aria-live="polite"></div>
 </div>
 
 <div class="card"><h2>📊 Security Model Summary Dashboard</h2><p class="sub">Readiness for Part 2. Built dynamically after BUILD.</p><div id="dashboard"><p class="sub">Click BUILD SECURITY TWIN.</p></div></div>
@@ -39,7 +41,8 @@
 <div class="card"><h2>3️⃣ Enhanced API Model</h2><p class="sub">Resources, fields, relations, ownership candidates, endpoint coverage.</p><div class="tree" id="apimodel">—</div></div>
 
 <div class="card"><h2>👤 Identity & Ownership Model</h2><p class="sub">All values from configuration above (not hardcoded). Ownership fields inferred from spec; map asserted in config. Editing config + Apply regenerates twin + laws.</p><div id="identitymodel">—</div>
-<div class="row"><button class="ghost" id="applyConfig">Apply config → rebuild</button></div>
+<div class="row"><button class="ghost" type="button" id="applyConfig">Apply config → rebuild</button></div>
+<div class="op-status" id="applyStatus" role="status" aria-live="polite"></div>
 </div>
 
 <div class="card"><h2>🔒 Data Sensitivity Engine</h2><p class="sub">Heuristic classification + reason. Override any field — laws update. Excessive-data-exposure = RISK, not auto-vuln.</p><div id="sensTable">—</div></div>
@@ -50,7 +53,16 @@
 
 <div class="card"><h2>🧠 Inference & Confidence Engine</h2><p class="sub">Every claim shows evidence + score + what would raise confidence. MEDIUM = needs Part-2 runtime proof.</p><div id="inferences">—</div></div>
 
-<div class="card"><h2>📜 Security Constitution</h2><p class="sub">Machine-readable security laws derived from the parsed spec and your configuration. Open a law to see its machine rule, scope, provenance, confidence rationale and test strategy; "Highlight scope in graph" shows it in the Security Twin.</p><div id="laws">—</div></div>
+<div class="card"><h2>📜 Security Constitution</h2><p class="sub">Machine-readable security laws derived from the parsed spec and your configuration. Open a law to see its machine rule, scope, provenance, confidence rationale and test strategy; "Highlight scope in graph" shows it in the Security Twin.</p>
+<div class="explorer" role="search" aria-label="Filter and export laws">
+  <div><label for="lawCategory">Category</label><select id="lawCategory" disabled><option value="">All categories</option></select></div>
+  <div><label for="lawSeverity">Severity</label><select id="lawSeverity" disabled><option value="">All severities</option></select></div>
+  <div><label for="lawConfidence">Confidence</label><select id="lawConfidence" disabled><option value="">All confidence levels</option></select></div>
+  <div class="grow"><label for="lawSearch">Search</label><input type="search" id="lawSearch" placeholder="law id, endpoint, resource, field, role…" disabled></div>
+  <div class="actions"><button class="ghost" type="button" id="lawExportJson" disabled>Export shown laws (JSON)</button><button class="ghost" type="button" id="lawExportMd" disabled>Export shown laws (Markdown)</button></div>
+</div>
+<p class="sub" id="lawCount" role="status" aria-live="polite"></p>
+<div id="laws">—</div></div>
 
 <div class="card"><h2>🧪 Testable Security Laws → Part 2 input</h2><p class="sub">Part 2 contract: one law per legacy category (BOLA / ADMIN / DATA / AUTHN / ROLE / POLICY) summarizing the constitution laws above, expanded to Given/When/Expect cases.</p><div id="lawTests">—</div>
 <div class="grid2" style="margin-top:12px">
@@ -58,11 +70,12 @@
 <div><h3>2. Security Twin</h3><pre class="out" id="out2">—</pre></div>
 <div><h3>3. Security Constitution</h3><pre class="out" id="out3">—</pre></div>
 <div><h3>4. Testable Security Model</h3><pre class="out" id="out4">—</pre>
-<div class="row"><button class="ghost" id="copy4">Copy</button><button class="ghost" id="dl4">Download JSON</button></div></div>
+<div class="row"><button class="ghost" type="button" id="copy4">Copy</button><button class="ghost" type="button" id="dl4">Download JSON</button></div>
+<div class="op-status" id="exportStatus" role="status" aria-live="polite"></div></div>
 </div>
-<p class="sub">Part 2 starts here: PART 1 Security Laws ▼ → PART 2 Autonomous Lab. Save the Testable Security Model JSON.</p>
+<p class="sub">Part 2 starts here: PART 1 Security Laws ▼ → PART 2 Test Lab. Save the Testable Security Model JSON.</p>
 </div>
 </div>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
