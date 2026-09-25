@@ -1,0 +1,18 @@
+
+* { box-sizing: border-box; }
+
+@media (max-width: 1100px) {
+  .tiles { grid-template-columns: repeat(3, 1fr); }
+  .three-col-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 768px) {
+  .app-layout { grid-template-columns: 1fr; }
+  .sidebar { display: none; } /* Hide sidebar on mobile */
+  .tiles { grid-template-columns: 1fr 1fr; }
+  .three-col-grid { grid-template-columns: 1fr; }
+  .main-content { padding: 16px; }
+  .top-nav { padding: 0 16px; }
+}
+@media (max-width: 500px) {
+  .tiles { grid-template-columns: 1fr; }
+}

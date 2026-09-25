@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveTargetAuthorization, normalizeTargetUrl } from "../../src/target/authorization";
+import { deriveTargetAuthorization, hasEmbeddedCredentials, normalizeTargetUrl } from "../../src/target/authorization";
 
 describe("deriveTargetAuthorization", () => {
   it("is UNKNOWN without a target", () => {
@@ -33,5 +33,20 @@ describe("deriveTargetAuthorization", () => {
   it("normalizes URLs for comparison", () => {
     expect(normalizeTargetUrl("HTTPS://Sandbox.Example.Test:443/v1//")).toBe("https://sandbox.example.test/v1");
     expect(normalizeTargetUrl("http://127.0.0.1:9000")).toBe("http://127.0.0.1:9000");
+  });
+});
+
+describe("hasEmbeddedCredentials", () => {
+  it.each([
+    ["http://user:pass@127.0.0.1:9000", true],
+    ["http://token@localhost", true],
+    ["https://:secret@sandbox.test", true],
+    ["notaurl://user:pw@x y", true],
+    ["http://127.0.0.1:9000", false],
+    ["http://127.0.0.1:9000/api?next=a@b", false],
+    ["", false],
+    [null, false],
+  ] as const)("%s -> %s", (url, expected) => {
+    expect(hasEmbeddedCredentials(url)).toBe(expected);
   });
 });

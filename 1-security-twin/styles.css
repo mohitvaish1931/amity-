@@ -1,22 +1,37 @@
 /* Step 1 specific styles; the shared theme (src/ui/theme.css) is bundled into app.css and loads first. */
-.law { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 8px 0; background: var(--surface-2); }
-.law h3 { margin: 0 0 6px; }
-.readiness { margin: 8px 0 0; padding-left: 20px; }
-.readiness li { margin: 2px 0; }
+.law { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin: 10px 0; background: var(--surface); }
+.law h3 { margin: 0 0 6px; font-size: 14px; }
+.law.is-focused { border-color: var(--acc); box-shadow: 0 0 0 3px var(--acc-bg); }
+.law-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+.law-grid .law { margin: 0; }
+.law ul { margin: 6px 0; padding-left: 18px; }
+.gwe { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 2px 10px; font-size: 13px; padding: 8px 0; border-top: 1px solid var(--line); }
+.gwe:first-of-type { border-top: 0; }
+.gwe dt { color: var(--mut); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; padding-top: 2px; }
+.gwe dd { margin: 0; min-width: 0; }
 
 /* Security Constitution panel */
-details.const-law > summary { cursor: pointer; list-style: revert; }
-details.const-law .const-statement { margin-top: 6px; font-weight: 600; }
-details.const-law .const-body h4 { margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--mut); }
+details.const-law { padding: 0; overflow: hidden; }
+details.const-law > summary { cursor: pointer; list-style: none; padding: 12px 14px; display: block; }
+details.const-law > summary::-webkit-details-marker { display: none; }
+details.const-law > summary:hover { background: var(--surface-2); }
+details.const-law[open] > summary { border-bottom: 1px solid var(--line); background: var(--surface-2); }
+details.const-law .law-id { font: 700 12.5px/1 var(--mono); color: var(--acc-strong); margin-right: 4px; }
+details.const-law .const-statement { margin-top: 8px; font-weight: 600; color: var(--txt); }
+details.const-law .const-body { padding: 4px 14px 14px; }
+details.const-law .const-body h4 { margin: 14px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--mut); }
 details.const-law .const-body ul, details.const-law .const-body ol { margin: 4px 0; padding-left: 20px; font-size: 13px; }
-details.const-law.is-focused { outline: 2px solid var(--warn); outline-offset: 2px; }
+details.const-law.is-focused { outline: 2px solid var(--acc); outline-offset: 2px; }
 details.const-law[hidden] { display: none; }
 
 /* Constitution Explorer */
-.explorer { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
+.explorer { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
 .explorer label { margin: 0 0 4px; }
 .explorer .grow { flex: 1 1 220px; }
 .explorer .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Security Twin graph container */
+#twinGraph { min-height: 120px; }
 
 /* Printable report (src/constitution/report.ts): hidden on screen, the only thing printed while body.printing is set. */
 .print-report[hidden] { display: none; }

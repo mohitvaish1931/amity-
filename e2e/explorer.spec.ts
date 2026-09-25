@@ -5,8 +5,8 @@ const APP = "/1-security-twin/";
 test.describe("Constitution Explorer", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(APP);
-    await page.getByRole("button", { name: "Load Demo Swagger + Config" }).click();
-    await page.getByRole("button", { name: "[ BUILD SECURITY TWIN ]" }).click();
+    await page.getByRole("button", { name: "Load demo spec + config" }).click();
+    await page.getByRole("button", { name: "Build Security Twin" }).click();
     await expect(page.getByTestId("law-card").first()).toBeVisible();
   });
 

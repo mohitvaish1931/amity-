@@ -17,9 +17,9 @@ test("the report prints alone and renders to a multi-page PDF", async ({ page },
   });
 
   await page.goto("/1-security-twin/");
-  await page.getByRole("button", { name: "Load Demo Swagger + Config" }).click();
+  await page.getByRole("button", { name: "Load demo spec + config" }).click();
   await expect(page.locator("#buildStatus")).toContainText("Demo spec and configuration loaded");
-  await page.getByRole("button", { name: "[ BUILD SECURITY TWIN ]" }).click();
+  await page.getByRole("button", { name: "Build Security Twin" }).click();
   await expect(page.getByTestId("law-card").first()).toBeVisible();
 
   await page.getByRole("button", { name: "Report: print / save as PDF" }).click();

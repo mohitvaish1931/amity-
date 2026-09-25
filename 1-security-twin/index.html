@@ -4,58 +4,146 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <!-- Scripts only from this origin (no inline script); connect-src stays open to http(s) because the user supplies the sandbox (and optional LLM) URL, which the target policy in src/target/policy.ts then restricts. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http: https:; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>Sentinel X Lab — Part 1: Security Twin</title>
+<title>Sentinel X — Security Twin</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="sandbox-banner">🛡 POLICY: use only sandbox targets you are authorized to test · production testing is prohibited</div>
-<div class="wrap">
-<header><h1>SENTINEL X LAB — Part 1</h1>
-<p>OpenAPI / Sandbox → Discovery → Enhanced Model → Twin → Constitution → Testable Laws</p>
-<div class="steps"><span class="step" id="s1">1 Connect</span><span class="step" id="s2">2 Discovery</span><span class="step" id="s3">3 Model</span><span class="step" id="s4">4 Twin</span><span class="step" id="s5">5 Constitution</span></div>
+<a class="skip-link" href="#main">Skip to content</a>
+<!-- Visible only when this page is opened without the build (app.css hides it). -->
+<div class="build-required" role="alert" style="margin:16px;padding:14px 16px;border:1px solid #b91c1c;border-radius:8px;background:#fef2f2;color:#7f1d1d;font:14px/1.5 system-ui,sans-serif">
+  <b>This page must be opened from the build.</b> The source folder has no compiled scripts or styles.
+  Run <code>npm start</code> in the project folder, then open <code>http://127.0.0.1:8000/1-security-twin/</code>.
+</div>
+<div class="sandbox-banner"><b>Policy</b> · use only sandbox targets you are authorized to test · production testing is prohibited</div>
+<header class="topbar">
+  <a class="brand" href="../1-security-twin/" aria-label="Sentinel X home">
+    <span class="brand-mark" aria-hidden="true"><i class="icon icon-shield"></i></span>
+    <span><span class="brand-name">SENTINEL X</span><span class="brand-tag">API security modelling</span></span>
+  </a>
+  <nav class="app-nav" aria-label="Application">
+    <a href="../1-security-twin/" aria-current="page"><span class="nav-no">1</span><span class="nav-label">Security Twin</span></a>
+    <a href="../2-test-lab/"><span class="nav-no">2</span><span class="nav-label">Test Lab</span></a>
+  </nav>
+  <div class="topbar-status" id="topStatus" data-state="UNKNOWN" aria-live="polite"><i class="dot" aria-hidden="true"></i><span>No sandbox target configured</span></div>
 </header>
+<nav class="flow" aria-label="Progress"><ol id="flow">
+  <li data-state="current"><a href="#sec-connect"><span class="flow-no">1</span><span class="flow-text"><span class="flow-label">Load spec</span><span class="flow-detail">spec + configuration</span></span></a></li>
+  <li data-state="todo"><a href="#sec-discovery"><span class="flow-no">2</span><span class="flow-text"><span class="flow-label">Parse</span><span class="flow-detail">endpoints and resources</span></span></a></li>
+  <li data-state="todo"><a href="#sec-twin"><span class="flow-no">3</span><span class="flow-text"><span class="flow-label">Security Twin</span><span class="flow-detail">graph of the model</span></span></a></li>
+  <li data-state="todo"><a href="#sec-constitution"><span class="flow-no">4</span><span class="flow-text"><span class="flow-label">Constitution</span><span class="flow-detail">security laws</span></span></a></li>
+  <li data-state="todo"><a href="#sec-handoff"><span class="flow-no">5</span><span class="flow-text"><span class="flow-label">Test Lab</span><span class="flow-detail">test specifications</span></span></a></li>
+</ol></nav>
 
-<div class="card"><h2>1️⃣ Connect Screen</h2><p class="sub">Provide the OpenAPI spec and your configuration (identities, permissions, ownership).</p>
-<label for="swaggerText">OpenAPI 3.x / Swagger 2.0 — upload a JSON or YAML spec, or paste below</label>
-<button type="button" class="drop" id="uploadBtn">📄 Upload spec (.json / .yaml / .yml)</button><input type="file" id="fileInput" accept=".json,.yaml,.yml" hidden aria-label="OpenAPI spec file">
-<textarea id="swaggerText" placeholder='Paste OpenAPI/Swagger JSON or YAML here, or click "Load Demo Swagger"'></textarea>
-<div class="row"><button class="ghost" type="button" id="demoBtn">Load Demo Swagger + Config</button><span class="sub">Demo spec + demo configuration. Replace with your own to prove data-driven.</span></div>
-<label for="baseUrl">Sandbox Base URL</label><input type="text" id="baseUrl" placeholder="https://your-authorized-sandbox.example (Load Demo fills it from the spec's servers)">
-<div class="row" style="margin-top:8px"><button class="ghost" type="button" id="testBtn">Test Connection (safe GET)</button><span class="sub" id="sandboxStatus" role="status" aria-live="polite">Not tested.</span></div>
-<label for="identitiesEditor">Configuration — identities (JSON array)</label><textarea id="identitiesEditor" style="min-height:70px" placeholder='[{"name":"...","role":"...","id":"..."}] — or Load Demo'></textarea>
-<label for="permissionsEditor">Configuration — permissions (JSON: role → action → bool)</label><textarea id="permissionsEditor" style="min-height:70px" placeholder='{"RoleA":{"Action":true}} — or Load Demo'></textarea>
-<label for="ownershipEditor">Configuration — ownership (JSON: objectId → ownerId)</label><textarea id="ownershipEditor" style="min-height:60px" placeholder='{"obj_1":"owner_id_1"} — or Load Demo'></textarea>
-<div class="row persist-row"><label style="margin:0" for="rememberChk"><input type="checkbox" id="rememberChk" style="width:auto"> Remember the spec and configuration in this browser (never credentials)</label><button class="ghost" type="button" id="clearSaved">Clear saved data</button></div>
-<div class="op-status" id="persistStatus" role="status" aria-live="polite"></div>
-<p class="field-label" id="identityChipsLabel">Configured identities</p>
-<div class="row" id="identityChips" aria-labelledby="identityChipsLabel"><span class="sub">Load Demo or paste config.</span></div>
-<div class="row" id="targetAuthState" data-state="UNKNOWN"><span class="sub">Authorization status unknown.</span></div>
-<button class="primary" type="button" id="buildBtn">[ BUILD SECURITY TWIN ]</button>
+<div class="shell has-toc">
+<nav class="toc" aria-label="Sections on this page"><h2>On this page</h2><ol>
+  <li><a href="#sec-connect">Connect</a></li>
+  <li><a href="#sec-summary">Summary</a></li>
+  <li><a href="#sec-discovery">API discovery</a></li>
+  <li><a href="#sec-model">Resource model</a></li>
+  <li><a href="#sec-identity">Identity &amp; ownership</a></li>
+  <li><a href="#sec-sensitivity">Data sensitivity</a></li>
+  <li><a href="#sec-twin">Security Twin</a></li>
+  <li><a href="#sec-inferences">Inferences</a></li>
+  <li><a href="#sec-constitution">Constitution</a></li>
+  <li><a href="#sec-handoff">Test Lab hand-off</a></li>
+</ol></nav>
+
+<main class="wrap" id="main" tabindex="-1">
+<section class="page-head" aria-labelledby="pageTitle">
+  <div>
+    <p class="eyebrow">Step 1 · Security Twin</p>
+    <h1 id="pageTitle">Turn an OpenAPI spec into a testable security model</h1>
+    <p class="lede">Sentinel X parses your API, maps who can reach which data, and derives machine-readable security laws with evidence and confidence. Everything is derived from the spec and your configuration; nothing is executed here.</p>
+  </div>
+  <div class="actions"><button class="primary lg" type="button" id="demoRunBtn">Run the demo</button></div>
+</section>
+<ul class="pillars" aria-label="What this step produces">
+  <li><b>Security Twin</b>Identities, roles, endpoints, resources and sensitive fields as one graph, with provenance on every edge.</li>
+  <li><b>Security Constitution</b>Laws such as “a customer may read only their own orders”, each with scope, evidence and a confidence rating.</li>
+  <li><b>Test specifications</b>Given / When / Expect cases the Test Lab plans against a sandbox you are authorized to test.</li>
+</ul>
+
+<section class="card" id="sec-connect" aria-labelledby="h-connect">
+<div class="card-head"><span class="step-no">01</span><div><h2 id="h-connect">Connect</h2><p class="why"><b>Why it matters:</b> the spec defines what exists; your configuration says who owns what and who may do what. Laws are only as good as these two inputs.</p></div></div>
+<div class="split">
+  <div>
+    <p class="panel-title">OpenAPI specification</p>
+    <button type="button" class="drop" id="uploadBtn"><i class="icon icon-upload" aria-hidden="true"></i> Upload spec <span class="hint">.json · .yaml · .yml</span></button><input type="file" id="fileInput" accept=".json,.yaml,.yml" hidden aria-label="OpenAPI spec file">
+    <label for="swaggerText">OpenAPI 3.x / Swagger 2.0 <span class="hint">— or paste JSON / YAML</span></label>
+    <textarea id="swaggerText" style="min-height:236px" placeholder='Paste an OpenAPI/Swagger spec here, or use "Load demo spec + config"'></textarea>
+  </div>
+  <div>
+    <p class="panel-title">Configuration</p>
+    <label for="identitiesEditor">Identities <span class="hint">JSON array of {name, role, id}</span></label><textarea id="identitiesEditor" style="min-height:72px" placeholder='[{"name":"...","role":"...","id":"..."}]'></textarea>
+    <label for="permissionsEditor">Permissions <span class="hint">JSON: role → action → true/false</span></label><textarea id="permissionsEditor" style="min-height:72px" placeholder='{"RoleA":{"Action":true}}'></textarea>
+    <label for="ownershipEditor">Ownership <span class="hint">JSON: objectId → ownerId</span></label><textarea id="ownershipEditor" style="min-height:60px" placeholder='{"obj_1":"owner_id_1"}'></textarea>
+    <p class="field-label" id="identityChipsLabel">Configured identities</p>
+    <div class="row" id="identityChips" aria-labelledby="identityChipsLabel"><span class="sub">None yet: load the demo or paste a configuration.</span></div>
+  </div>
+</div>
+<div class="split" style="margin-top:6px">
+  <div>
+    <label for="baseUrl">Sandbox base URL <span class="hint">optional · only needed for connection checks and Test Lab live runs</span></label>
+    <div class="row" style="flex-wrap:nowrap"><input type="text" id="baseUrl" placeholder="http://127.0.0.1:8080 (Load demo fills it from the spec's servers)"><button class="ghost" type="button" id="testBtn">Test connection</button></div>
+    <div class="row" style="margin-top:6px"><span class="sub" id="sandboxStatus" role="status" aria-live="polite" style="margin:0">Not tested. The check sends one GET without credentials, to local or private hosts only.</span></div>
+    <div class="row" id="targetAuthState" data-state="UNKNOWN" style="margin-top:6px"><span class="sub">Authorization status unknown.</span></div>
+  </div>
+  <div>
+    <p class="field-label">This browser</p>
+    <div class="row persist-row"><label class="check" for="rememberChk" style="margin:0"><input type="checkbox" id="rememberChk"> Remember the spec and configuration in this browser (never credentials)</label><button class="ghost" type="button" id="clearSaved">Clear saved data</button></div>
+    <div class="op-status" id="persistStatus" role="status" aria-live="polite"></div>
+  </div>
+</div>
+<div class="row" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)">
+  <button class="primary lg" type="button" id="buildBtn">Build Security Twin</button>
+  <button class="ghost lg" type="button" id="demoBtn">Load demo spec + config</button>
+  <span class="sub" style="margin:0">The demo is a small order-management API. Replace it with your own spec to see that nothing is hardcoded.</span>
+</div>
 <div class="op-status" id="buildStatus" role="status" aria-live="polite"></div>
-</div>
+</section>
 
-<div class="card"><h2>📊 Security Model Summary Dashboard</h2><p class="sub">Readiness for Part 2. Built dynamically after BUILD.</p><div id="dashboard"><p class="sub">Click BUILD SECURITY TWIN.</p></div></div>
+<section class="card" id="sec-summary" aria-labelledby="h-summary">
+<div class="card-head"><span class="step-no">02</span><div><h2 id="h-summary">Security model summary</h2><p class="why"><b>Why it matters:</b> one glance at the attack surface, and a checklist of what the Test Lab still needs.</p></div></div>
+<div id="dashboard"><div class="empty">Nothing built yet. <b>Run the demo</b> or build from your own spec.</div></div>
+</section>
 
-<div class="card"><h2>2️⃣ API Discovery <span class="sub" id="invCount"></span></h2><p class="sub">Endpoints, auth, resource, action, params/body. OpenAPI 3.0/3.1 + Swagger 2.0 (JSON or YAML), $ref (incl. recursive), allOf/oneOf/anyOf, nested objects and arrays.</p><div id="discovery"><p class="sub">Click BUILD SECURITY TWIN.</p></div></div>
+<section class="card" id="sec-discovery" aria-labelledby="h-discovery">
+<div class="card-head"><span class="step-no">03</span><div><h2 id="h-discovery">API discovery <span class="count" id="invCount"></span></h2><p class="why"><b>Why it matters:</b> every endpoint with its authentication, resource and action. OpenAPI 3.0/3.1 and Swagger 2.0, JSON or YAML, including $ref and allOf/oneOf/anyOf.</p></div></div>
+<div id="discovery"><div class="empty">Endpoints appear here after the build.</div></div>
+</section>
 
-<div class="card"><h2>3️⃣ Enhanced API Model</h2><p class="sub">Resources, fields, relations, ownership candidates, endpoint coverage.</p><div class="tree" id="apimodel">—</div></div>
+<section class="card" id="sec-model" aria-labelledby="h-model">
+<div class="card-head"><span class="step-no">04</span><div><h2 id="h-model">Resource model</h2><p class="why"><b>Why it matters:</b> resources, fields, relations and the ownership field that decides whether one user can read another user's data.</p></div></div>
+<div class="tree" id="apimodel">—</div>
+</section>
 
-<div class="card"><h2>👤 Identity & Ownership Model</h2><p class="sub">All values from configuration above (not hardcoded). Ownership fields inferred from spec; map asserted in config. Editing config + Apply regenerates twin + laws.</p><div id="identitymodel">—</div>
-<div class="row"><button class="ghost" type="button" id="applyConfig">Apply config → rebuild</button></div>
+<section class="card" id="sec-identity" aria-labelledby="h-identity">
+<div class="card-head"><span class="step-no">05</span><div><h2 id="h-identity">Identity &amp; ownership</h2><p class="why"><b>Why it matters:</b> roles, permissions and object owners come from your configuration, not from code. Edit the configuration and apply to regenerate the twin and laws.</p></div>
+<div class="head-aside"><button class="ghost" type="button" id="applyConfig">Apply configuration</button></div></div>
+<div id="identitymodel">—</div>
 <div class="op-status" id="applyStatus" role="status" aria-live="polite"></div>
-</div>
+</section>
 
-<div class="card"><h2>🔒 Data Sensitivity Engine</h2><p class="sub">Heuristic classification + reason. Override any field — laws update. Excessive-data-exposure = RISK, not auto-vuln.</p><div id="sensTable">—</div></div>
+<section class="card" id="sec-sensitivity" aria-labelledby="h-sens">
+<div class="card-head"><span class="step-no">06</span><div><h2 id="h-sens">Data sensitivity</h2><p class="why"><b>Why it matters:</b> fields are classified by name with a stated reason. Override any classification and the laws update. Exposure of a sensitive field is a risk to test, not a finding.</p></div></div>
+<div id="sensTable">—</div>
+</section>
 
-<div class="card"><h2>🧬 Dynamic Security Twin</h2><p class="sub">Interactive graph generated from the parsed spec, your configuration and the generated laws: identities, roles, endpoints, resources, key fields and laws. Every edge shows its provenance. Click a node or edge to inspect it; drag to pan, scroll to zoom.</p>
-<div id="twinGraph"><p class="sub">Click BUILD SECURITY TWIN.</p></div>
-<h3>Twin JSON</h3><pre class="out" id="twinJson">—</pre></div>
+<section class="card" id="sec-twin" aria-labelledby="h-twin">
+<div class="card-head"><span class="step-no">07</span><div><h2 id="h-twin">Security Twin</h2><p class="why"><b>Why it matters:</b> the whole model as one interactive graph. Every edge shows where it came from. Select a node or edge to inspect it; drag to pan, scroll to zoom, or pick a law to highlight its scope.</p></div></div>
+<div id="twinGraph"><div class="empty">The graph is generated after the build.</div></div>
+<details class="fold" style="margin-top:12px"><summary>Twin JSON</summary><pre class="out" id="twinJson">—</pre></details>
+</section>
 
-<div class="card"><h2>🧠 Inference & Confidence Engine</h2><p class="sub">Every claim shows evidence + score + what would raise confidence. MEDIUM = needs Part-2 runtime proof.</p><div id="inferences">—</div></div>
+<section class="card" id="sec-inferences" aria-labelledby="h-inf">
+<div class="card-head"><span class="step-no">08</span><div><h2 id="h-inf">Inferences &amp; confidence</h2><p class="why"><b>Why it matters:</b> every claim lists the evidence signals behind it and what would raise its confidence. MEDIUM means runtime proof in the Test Lab is still needed.</p></div></div>
+<div id="inferences">—</div>
+</section>
 
-<div class="card"><h2>📜 Security Constitution</h2><p class="sub">Machine-readable security laws derived from the parsed spec and your configuration. Open a law to see its machine rule, scope, provenance, confidence rationale and test strategy; "Highlight scope in graph" shows it in the Security Twin.</p>
+<section class="card" id="sec-constitution" aria-labelledby="h-const">
+<div class="card-head"><span class="step-no">09</span><div><h2 id="h-const">Security Constitution</h2><p class="why"><b>Why it matters:</b> machine-readable laws derived from the spec and configuration. Open a law for its rule, scope, provenance, confidence and test strategy, then jump to its scope in the graph or to its test specification.</p></div></div>
 <div class="explorer" role="search" aria-label="Filter and export laws">
   <div><label for="lawCategory">Category</label><select id="lawCategory" disabled><option value="">All categories</option></select></div>
   <div><label for="lawSeverity">Severity</label><select id="lawSeverity" disabled><option value="">All severities</option></select></div>
@@ -67,21 +155,28 @@
     <button class="ghost" type="button" id="lawPrintPdf" disabled>Report: print / save as PDF</button>
   </div>
 </div>
-<p class="sub" id="lawCount" role="status" aria-live="polite"></p>
+<p class="sub" id="lawCount" role="status" aria-live="polite" style="margin-top:10px"></p>
 <div class="op-status" id="reportStatus" role="status" aria-live="polite"></div>
-<div id="laws">—</div></div>
+<div id="laws"><div class="empty">Laws are generated after the build.</div></div>
+</section>
 
-<div class="card"><h2>🧪 Testable Security Laws → Part 2 input</h2><p class="sub">Part 2 contract: one law per legacy category (BOLA / ADMIN / DATA / AUTHN / ROLE / POLICY) summarizing the constitution laws above, expanded to Given/When/Expect cases.</p><div id="lawTests">—</div>
-<div class="grid2" style="margin-top:12px">
-<div><h3>1. API Inventory</h3><pre class="out" id="out1">—</pre></div>
+<section class="card" id="sec-handoff" aria-labelledby="h-tests">
+<div class="card-head"><span class="step-no">10</span><div><h2 id="h-tests">Test specifications → Test Lab</h2><p class="why"><b>Why it matters:</b> each law becomes Given / When / Expect cases. The Test Lab plans them against a sandbox; nothing has been executed yet.</p></div></div>
+<div class="handoff" id="handoff" hidden>
+  <div><h2>Ready for the Test Lab</h2><p id="handoffSummary"></p></div>
+  <div class="row"><button class="primary lg" type="button" id="handoffBtn">Open in Test Lab →</button><button class="ghost lg" type="button" id="dl4">Download JSON</button><button class="ghost lg" type="button" id="copy4">Copy</button></div>
+</div>
+<div class="op-status" id="exportStatus" role="status" aria-live="polite"></div>
+<div id="lawTests"><div class="empty">Test specifications appear after the build.</div></div>
+<details class="fold" style="margin-top:14px"><summary>Raw outputs (JSON)</summary>
+<div class="grid2" style="margin-top:10px">
+<div><h3>1. API inventory</h3><pre class="out" id="out1">—</pre></div>
 <div><h3>2. Security Twin</h3><pre class="out" id="out2">—</pre></div>
 <div><h3>3. Security Constitution</h3><pre class="out" id="out3">—</pre></div>
-<div><h3>4. Testable Security Model</h3><pre class="out" id="out4">—</pre>
-<div class="row"><button class="ghost" type="button" id="copy4">Copy</button><button class="ghost" type="button" id="dl4">Download JSON</button></div>
-<div class="op-status" id="exportStatus" role="status" aria-live="polite"></div></div>
-</div>
-<p class="sub">Part 2 starts here: PART 1 Security Laws ▼ → PART 2 Test Lab. Save the Testable Security Model JSON.</p>
-</div>
+<div><h3>4. Testable security model</h3><pre class="out" id="out4">—</pre></div>
+</div></details>
+</section>
+</main>
 </div>
 <!-- Printable report: filled on demand and shown only when printing (browser "Save as PDF"). -->
 <section id="printReport" class="print-report" aria-label="Printable Security Constitution report" hidden></section>

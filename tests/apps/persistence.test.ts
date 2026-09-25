@@ -47,7 +47,7 @@ describe("Step 1 persistence", () => {
 
     app = await loadApp("1-security-twin", { beforeRun: (w) => Object.entries(saved).forEach(([k, v]) => w.localStorage.setItem(k, v)) });
     expect((app.$("rememberChk") as unknown as HTMLInputElement).checked).toBe(true);
-    expect(app.$("persistStatus").textContent).toMatch(/Restored the spec and configuration saved in this browser at .* Next: BUILD SECURITY TWIN\./);
+    expect(app.$("persistStatus").textContent).toMatch(/Restored the spec and configuration saved in this browser at .* Next: Build Security Twin./);
     expect(app.$("swaggerText").value).toBe(inputs.spec);
     expect(app.$("identitiesEditor").value).toBe(inputs.ids);
     expect(app.$("baseUrl").value).toBe(inputs.url);

@@ -1,23 +1,40 @@
 /* Step 2 specific styles; the shared theme (src/ui/theme.css) is bundled into app.css and loads first. */
-.wrap { max-width: 1480px; }
 
-/* Target + run status: always visible so the user sees what a run would hit */
-.target-bar { position: sticky; top: 29px; z-index: 40; display: flex; flex-wrap: wrap; gap: 4px 20px; align-items: center; padding: 8px 20px; background: var(--surface); border-bottom: 1px solid var(--line); font-size: 12px; }
-.target-bar b { letter-spacing: .06em; font-weight: 650; }
+/* Target + run status: always visible under the top bar, so the user sees what a run would hit */
+.target-bar { position: sticky; top: var(--topbar-h); z-index: 55; display: flex; flex-wrap: wrap; gap: 4px 22px; align-items: center; padding: 8px 24px; background: var(--surface); border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--txt-2); }
+.target-bar b { letter-spacing: .06em; font-weight: 700; font-size: 11px; color: var(--mut); margin-right: 4px; }
+.target-bar b.warn, .target-bar b.ok { font-size: 12px; letter-spacing: .03em; }
+.target-bar .warn { color: var(--warn); }
 .target-bar code { word-break: break-all; }
+.target-bar .env-sandbox { color: var(--ok); font-weight: 700; letter-spacing: .03em; font-size: 12px; margin-right: 4px; }
+html { scroll-padding-top: calc(var(--topbar-h) + 52px); }
 
 /* test cards: selectable (keyboard: Enter / Space) */
-.test { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin: 8px 0; background: var(--surface-2); }
+.test { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin: 8px 0; background: var(--surface); }
 .test[role="button"] { cursor: pointer; }
-.test[role="button"]:hover { border-color: var(--line-strong); }
-.test.sel { border-color: var(--acc); box-shadow: inset 3px 0 0 var(--acc); }
-.test h3 { margin: 0 0 6px; font-size: 13px; }
+.test[role="button"]:hover { border-color: var(--line-strong); background: var(--surface-2); }
+.test.sel { border-color: var(--acc); box-shadow: inset 3px 0 0 var(--acc); background: var(--acc-bg); }
+.test h3 { margin: 0 0 6px; font-size: 13px; font-weight: 650; }
+.test .law-link { font-family: var(--mono); font-size: 12px; }
 
-/* Workspace: tests | execution | evidence side by side on wide screens, stacked below */
-.workspace { display: grid; gap: 12px; grid-template-columns: 1fr; align-items: start; }
+/* filters above the test list, and report actions */
+.filters { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+.filters label { margin: 0 0 4px; }
+.filters > div { flex: 1 1 130px; min-width: 0; }
+.filters select { width: 100%; }
+.report-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.report-actions > div { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; background: var(--surface-2); min-width: 0; }
+.plan-law { background: none; border: 0; padding: 0; color: var(--acc-strong); font: 600 12.5px/1.4 var(--mono); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.plan-law[aria-pressed="true"] { color: var(--txt); text-decoration: none; background: var(--acc-bg); border-radius: 4px; padding: 0 4px; }
+
+/* Workspace: tests | execution | inspector side by side on wide screens, stacked below */
+.workspace { display: grid; gap: 14px; grid-template-columns: 1fr; align-items: start; margin: 16px 0; scroll-margin-top: calc(var(--topbar-h) + 52px); }
 .workspace > .card { margin: 0; min-width: 0; }
 .workspace .scroll { max-height: 640px; overflow: auto; }
 @media (min-width: 1280px) {
   .workspace { grid-template-columns: minmax(300px, 1fr) minmax(360px, 1.25fr) minmax(360px, 1.25fr); }
-  .workspace #preview { position: sticky; top: 72px; }
+  .workspace #preview { position: sticky; top: calc(var(--topbar-h) + 60px); }
+}
+@media (max-width: 640px) {
+  .target-bar { padding: 8px 12px; gap: 2px 14px; }
 }

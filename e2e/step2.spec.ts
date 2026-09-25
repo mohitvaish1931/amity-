@@ -20,8 +20,8 @@ async function planDemo(page: Page, mode: "mock" | "live" = "mock") {
   await page.goto(APP);
   await page.getByRole("button", { name: "Load Demo Model" }).click();
   await expect(page.locator("#modelStatus")).toContainText("Demo model loaded");
-  await page.getByLabel("Executor:").selectOption(mode);
-  await page.getByRole("button", { name: "[ PLAN TESTS ]" }).click();
+  await page.getByLabel("Executor").selectOption(mode);
+  await page.getByRole("button", { name: "Plan tests" }).click();
   await expect(page.locator("#modelStatus")).toContainText("Planned 22 test cases");
 }
 const bar = (page: Page) => page.getByRole("region", { name: "Target and run status" });
@@ -75,7 +75,7 @@ test.describe("Step 2: target guardrails", () => {
   ] as const) {
     test(`refuses ${url} as a target`, async ({ page }) => {
       await planDemo(page, "live");
-      await page.getByLabel("Sandbox Base URL (from model, editable)").fill(url);
+      await page.getByLabel("Sandbox base URL").fill(url);
       await expect(page.getByTestId("target-refused")).toContainText(reason);
       await expect(page.getByRole("button", { name: "Register sandbox target" })).toHaveCount(0);
       await expect(bar(page)).toContainText("NOT REGISTERED");
@@ -85,10 +85,12 @@ test.describe("Step 2: target guardrails", () => {
   test("a live run against an unregistered URL sends nothing", async ({ page, baseURL }) => {
     const seen = watch(page);
     await planDemo(page, "live");
-    await page.getByLabel("Sandbox Base URL (from model, editable)").fill("https://api.github.com");
+    await page.getByLabel("Sandbox base URL").fill("https://api.github.com");
     await page.getByRole("button", { name: "RUN ALL" }).click();
-    await expect(bar(page)).toContainText("22/22 tests run", { timeout: 20_000 });
-    await expect(page.locator("#results")).toContainText("not a registered target");
+    // Preflight: the whole run is refused before any case starts.
+    await expect(page.getByTestId("run-status")).toContainText("Live run blocked: https://api.github.com is not a registered target");
+    await expect(page.getByTestId("run-status")).toContainText("Nothing was sent");
+    await expect(bar(page)).toContainText("0/22 tests run");
     await expect(page.locator("#results")).not.toContainText(/VIOLATION|CONFIRMED/);
     expect(appAssets(seen.requests, new URL(baseURL!).origin)).toEqual([]);
   });
@@ -103,7 +105,7 @@ test.describe("Step 2: target guardrails", () => {
     });
     const seen = watch(page);
     await planDemo(page, "live");
-    await page.getByLabel("Sandbox Base URL (from model, editable)").fill(TARGET);
+    await page.getByLabel("Sandbox base URL").fill(TARGET);
     await page.getByLabel(/I confirm I am authorized/).check();
     await page.getByRole("button", { name: "Register sandbox target" }).click();
     await expect(page.getByTestId("target-registered")).toContainText("not independently verified");

@@ -5,7 +5,7 @@
 import { analyzeSpecText } from "../src/model/index";
 import { exportConstitutionJson, exportConstitutionMarkdown, filterLaws, generateSecurityConstitution, renderConstitutionReport, toLegacyLaws } from "../src/constitution/index";
 import { fillPath, lastPathParam } from "../src/paths/index";
-import { deriveTargetAuthorization } from "../src/target/authorization";
+import { deriveTargetAuthorization, hasEmbeddedCredentials } from "../src/target/authorization";
 import { assessTargetHost } from "../src/target/policy";
 import "../src/ui/theme.css";
 import { html, joinHtml, setHtml } from "../src/ui/safe-html";
@@ -50,7 +50,9 @@ function renderTargetAuth(){
   box.dataset.state = a.state;
   const cls = a.state==="CONFIRMED" ? "ok" : a.state==="CONFIGURED" ? "sub" : "warn";
   const icon = a.state==="CONFIRMED" ? "✅" : a.state==="CONFIGURED" ? "ℹ" : "⚠";
-  setHtml(box, html`<span class="${cls}">${icon} ${a.label}</span><span class="sub" style="margin:0 0 0 8px">${a.detail}</span>`);
+  setHtml(box, html`<div><span class="${cls}">${icon} ${a.label}</span><p class="sub" style="margin:2px 0 0">${a.detail}</p></div>`);
+  const top = $("topStatus");
+  if(top){ top.dataset.state = a.state; setHtml(top, html`<i class="dot" aria-hidden="true"></i><span title="${a.detail}">${a.target ? `${a.label}: ${a.target}` : a.label}</span>`); }
 }
 function isIdGet(e){ return e.method==="GET"&&/\{.+\}/.test(e.path); }
 function authLabel(e){ return e.authMode==="required"?"Required":e.authMode==="optional"?"Optional":"Open"; }
@@ -213,7 +215,8 @@ function buildDashboard(){
 
 function buildTestableModel(){
   const auth = deriveTargetAuthorization(STATE.baseUrl, null);
-  return { version:"part1-v5-typed", sandboxOnly:true, sandboxBaseUrl:STATE.baseUrl,
+  // A URL with embedded credentials is never exported (it would also travel in the Test Lab hand-off).
+  return { version:"part1-v5-typed", sandboxOnly:true, sandboxBaseUrl:hasEmbeddedCredentials(STATE.baseUrl) ? "" : STATE.baseUrl,
     targetAuthorization:{ state:auth.state, label:auth.label, detail:auth.detail },
     sandboxCheck:STATE.sandbox, specInfo:STATE.specInfo, warnings:STATE.warnings,
     testIdentities:cfgIdentities(), permissions:cfgPermissions(),
@@ -223,21 +226,41 @@ function buildTestableModel(){
 }
 
 // ---------- render ----------
-function setSteps(n){ ["s1","s2","s3","s4","s5"].forEach((id,i)=> $(id).classList.toggle("done", i<n)); }
-function renderAll(){ renderDashboard(); renderDiscovery(); renderModel(); renderIdentity(); renderSens(); renderTwin(); renderInferences(); renderConstitution(); renderLawTests(); renderOutputs(); setSteps(5); }
+/** Progress through the flow, from real state only: what has been loaded, parsed, graphed and generated. */
+function renderFlow(){
+  const built = !!STATE.constitution;
+  const loaded = built || !!$("swaggerText").value.trim();
+  const laws = built ? STATE.constitution.laws.length : 0;
+  const cases = STATE.laws.reduce((n,l)=>n+(l.tests||[]).length,0);
+  const steps = [
+    { done:loaded, detail: loaded ? (built ? STATE.specInfo.title||"spec loaded" : "spec loaded, not built yet") : "spec + configuration" },
+    { done:built, detail: built ? `${STATE.endpoints.length} endpoints · ${Object.keys(STATE.resources).length} resources` : "endpoints and resources" },
+    { done:built, detail: built ? `${cfgIdentities().length} identities · ${distinctRoles().length} roles` : "graph of the model" },
+    { done:built&&laws>0, detail: built ? `${laws} law${laws===1?"":"s"}` : "security laws" },
+    { done:false, detail: built ? `${cases} test specification${cases===1?"":"s"} ready` : "test specifications" },
+  ];
+  const current = steps.findIndex(s=>!s.done);
+  document.querySelectorAll("#flow > li").forEach((li,i)=>{
+    const s = steps[i]; if(!s) return;
+    li.dataset.state = s.done ? "done" : i===current ? "current" : "todo";
+    const d = li.querySelector(".flow-detail"); if(d) d.textContent = s.detail;
+    const a = li.querySelector("a"); if(a){ if(li.dataset.state==="current") a.setAttribute("aria-current","step"); else a.removeAttribute("aria-current"); }
+  });
+}
+function renderAll(){ renderDashboard(); renderDiscovery(); renderModel(); renderIdentity(); renderSens(); renderTwin(); renderInferences(); renderConstitution(); renderLawTests(); renderOutputs(); renderHandoff(); renderFlow(); }
 
 function renderDashboard(){
-  const d = STATE.dashboard; if(!d){ $("dashboard").textContent="—"; return; }
+  const d = STATE.dashboard; if(!d){ setHtml($("dashboard"), html`<div class="empty">Nothing built yet. <b>Run the demo</b> or build from your own spec.</div>`); return; }
+  const tile = (href, value, label) => html`<a class="tile" href="${href}"><span class="tile-go" aria-hidden="true">→</span><b>${value}</b><span class="tile-label">${label}</span></a>`;
   setHtml($("dashboard"), html`<div class="tiles">
-    <div class="tile"><b>${d.endpoints}</b><span class="sub">endpoints</span></div>
-    <div class="tile"><b>${d.resources}</b><span class="sub">resources</span></div>
-    <div class="tile"><b>${d.protected}/${d.open}</b><span class="sub">protected/open</span></div>
-    <div class="tile"><b>${d.fields}</b><span class="sub">fields (${d.sens} sens)</span></div>
-    <div class="tile"><b>${d.high}H/${d.med}M/${d.low}L</b><span class="sub">constitution laws</span></div>
-    <div class="tile"><b>${d.identities}</b><span class="sub">identities (${d.roles.join(", ")||"—"})</span></div></div>
-    <p class="sub">Part-2 readiness: <b>${d.checks.filter(c=>c.ok).length}/${d.checks.length} checks (${d.readiness}%)</b> · sandbox: ${d.sandbox} · target: ${d.authorization} · admin role: ${d.adminRole||"none"} ${STATE.warnings.length?`· ⚠ ${STATE.warnings.length} warnings`:""}</p>
-    <div class="bar"><i style="width:${d.readiness}%"></i></div>
-    <ul class="sub readiness" data-testid="readiness-checks">${d.checks.map(c=>html`<li>${c.ok?"✅":"❌"} ${c.label} <span class="sub">(${c.detail})</span></li>`)}</ul>`);
+    ${tile("#sec-discovery", d.endpoints, `endpoints · ${d.protected} protected, ${d.open} open`)}
+    ${tile("#sec-model", d.resources, `resources · ${d.owned} with an ownership field`)}
+    ${tile("#sec-sensitivity", d.sens, `sensitive of ${d.fields} fields`)}
+    ${tile("#sec-identity", d.identities, `identities · ${d.roles.join(", ")||"no roles"}`)}
+    ${tile("#sec-constitution", d.high+d.med+d.low, `laws · ${d.high} high, ${d.med} medium, ${d.low} low confidence`)}</div>
+    <div class="meter"><span class="meter-label">Test Lab readiness: <b>${d.checks.filter(c=>c.ok).length}/${d.checks.length} checks (${d.readiness}%)</b></span><div class="bar" role="img" aria-label="${d.readiness}% of readiness checks pass"><i style="width:${d.readiness}%"></i></div></div>
+    <ul class="checklist" data-testid="readiness-checks">${d.checks.map(c=>html`<li><span class="mark ${c.ok?"is-ok":"is-no"}">${c.ok?"✅":"❌"}</span> <span>${c.label} <span class="sub">(${c.detail})</span></span></li>`)}</ul>
+    <p class="sub" style="margin:12px 0 0">sandbox: ${d.sandbox} · target: ${d.authorization} · admin role: ${d.adminRole||"none"}${STATE.warnings.length?` · ⚠ ${STATE.warnings.length} warnings (see API discovery)`:""}</p>`);
 }
 function renderDiscovery(){
   const info = STATE.specInfo;
@@ -245,7 +268,7 @@ function renderDiscovery(){
     <td>${authLabel(e)}<br><span class="sub">${e.authDetail}</span></td><td>${e.resource}</td><td>${e.action}</td>
     <td class="sub">${e.params.map(p=>`${p.name}(${p.in})`).join(", ")||"—"}${e.bodySchemaName?html`<br>body:${e.bodySchemaName}`:""}${e.respSchemaName?html`<br>resp:${e.respSchemaName}`:""}${e.bodyContentTypes.length?html`<br>consumes:${e.bodyContentTypes.join(", ")}`:""}</td></tr>`);
   setHtml($("discovery"), html`<p class="sub">${info.title?`${info.title} · `:""}${info.version||""} · ${STATE.endpoints.length} endpoints · servers: ${(info.servers||[]).join(", ")||"—"}</p>
-    ${STATE.endpoints.length? html`<table><tr><th scope="col">ID</th><th scope="col">Method</th><th scope="col">Path</th><th scope="col">Auth</th><th scope="col">Resource</th><th scope="col">Action</th><th scope="col">Params/Body</th></tr>${rows}</table>` : html`<p class="sub">No endpoints yet.</p>`}
+    ${STATE.endpoints.length? html`<div class="table-wrap"><table><tr><th scope="col">ID</th><th scope="col">Method</th><th scope="col">Path</th><th scope="col">Auth</th><th scope="col">Resource</th><th scope="col">Action</th><th scope="col">Params/Body</th></tr>${rows}</table></div>` : html`<div class="empty">The spec parsed, but it declares no endpoints.</div>`}
     ${STATE.warnings.length? html`<div class="note">⚠ ${joinHtml(STATE.warnings, html`<br>`)}</div>`:""}`);
   $("invCount").textContent = STATE.endpoints.length + " endpoints";
 }
@@ -271,7 +294,7 @@ function renderIdentity(){
     <p class="sub">Identities (from config): ${cfgIdentities().map(i=>`${i.name} (${i.id}, ${i.role})`).join(" · ")||"none"}</p>
     <p class="sub">Ownership (from config): ${ownEntries}</p>
     <p class="sub">Ownership fields (inferred from spec): ${ownFields}</p>`);
-  const chips = cfgIdentities().map(i=>html`<span class="chip on">[ ${i.name} · ${i.id} · ${i.role} ]</span>`);
+  const chips = cfgIdentities().map(i=>html`<span class="chip on"><b>${i.name}</b> ${i.id} · ${i.role}</span>`);
   setHtml($("identityChips"), chips.length? html`${chips}` : html`<span class="sub">No identities — configure below + Load Demo.</span>`);
 }
 function renderSens(){
@@ -318,11 +341,11 @@ const CATEGORY_LABEL = { OBJECT_AUTHORIZATION:"Object authorization", FUNCTION_A
 function endpointLabel(id){ const e=STATE.endpoints.find(x=>x.id===id); return e?`${id} ${e.method} ${e.path}`:id; }
 function renderConstitution(){
   const c = STATE.constitution;
-  if(!c){ $("laws").textContent="—"; return; }
+  if(!c){ setHtml($("laws"), html`<div class="empty">Laws are generated after the build.</div>`); return; }
   const counts = Object.keys(CATEGORY_LABEL).map(k=>[k, c.laws.filter(l=>l.category===k).length]).filter(([,n])=>n);
   const scopeRow = (label, items)=> items.length ? html`<div><b>${label}:</b> ${items.join(" · ")}</div>` : "";
   const cards = c.laws.map(l=>html`<details class="law const-law" data-testid="law-card" data-law="${l.id}">
-    <summary><b>${l.id}</b> <span class="badge">${CATEGORY_LABEL[l.category]||l.category}</span> <span class="badge">${l.severity}</span>
+    <summary><span class="law-id">${l.id}</span> <span class="badge">${CATEGORY_LABEL[l.category]||l.category}</span> <span class="badge">${l.severity}</span>
       <span class="badge b-${l.confidence}">${l.confidence} · ${l.confidenceRationale.score}% of signals</span>
       <div class="const-statement">${l.statement}</div></summary>
     <div class="const-body">
@@ -337,12 +360,13 @@ function renderConstitution(){
       <h4>Test strategy <span class="sub">(${l.testStrategy.kind} · specification only, not executed)</span></h4>
       ${l.testStrategy.preconditions.length?html`<div class="sub">Preconditions: ${l.testStrategy.preconditions.join(" · ")}</div>`:""}
       <ol>${l.testStrategy.steps.map(st=>html`<li>${st}</li>`)}</ol><div><b>Expected:</b> ${l.testStrategy.expected}</div>
-      <div class="row"><button class="ghost" type="button" data-testid="law-focus" data-focus-law="${l.id}">Highlight scope in graph</button></div>
+      <div class="row"><button class="ghost" type="button" data-testid="law-focus" data-focus-law="${l.id}">Highlight scope in graph</button><button class="ghost" type="button" data-testid="law-spec" data-spec-law="${l.id}">View test specification</button></div>
     </div></details>`);
   setHtml($("laws"), html`<p class="sub">${c.laws.length} laws · ${counts.map(([k,n])=>`${n} ${CATEGORY_LABEL[k].toLowerCase()}`).join(" · ")}</p>${cards}
     ${c.notes.length?html`<div class="note">${joinHtml(c.notes, html`<br>`)}</div>`:""}
     <div class="note">Laws are derived from the spec model and configuration. Confidence is computed from the listed evidence signals; test strategies are specifications, not executed tests.</div>`);
   document.querySelectorAll("#laws [data-focus-law]").forEach(b=>b.onclick=()=>focusLaw(b.dataset.focusLaw));
+  document.querySelectorAll("#laws [data-spec-law]").forEach(b=>b.onclick=()=>showSpecFor(b.dataset.specLaw));
   renderLawFilters();
 }
 // ---------- Constitution Explorer: filter options come from the laws present; exports contain what is shown ----------
@@ -396,10 +420,40 @@ function printReport(){
 function focusLaw(id){
   document.querySelectorAll("#laws details.const-law").forEach(d=>d.classList.toggle("is-focused", d.dataset.law===id));
   if(twinView) twinView.focusLaw(id);
-  const g=$("twinGraph"); if(g&&g.scrollIntoView) g.scrollIntoView({ behavior: window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block:"center" });
+  const g=$("twinGraph"); if(g&&g.scrollIntoView) g.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block:"center" });
 }
 function renderLawTests(){
-  setHtml($("lawTests"), html`${STATE.laws.map(l=>html`<div class="law"><h3>${l.id} tests</h3>${(l.tests||[]).map(t=>html`<div>· <b>Given</b> ${t.given} <b>When</b> <code>${t.when}</code> <b>Expect</b> ${t.expect}</div>`)}</div>`)}`);
+  if(!STATE.laws.length){ setHtml($("lawTests"), html`<div class="empty">${STATE.constitution ? "No law produced a test specification for this spec and configuration." : "Test specifications appear after the build."}</div>`); return; }
+  setHtml($("lawTests"), html`<div class="law-grid">${STATE.laws.map(l=>html`<div class="law" id="spec-${l.id}" data-spec="${l.id}" data-covers="${(l.constitutionLawIds||[l.id]).join(" ")}">
+    <h3><span class="badge">${l.category}</span> ${l.id} <span class="sub">· covers ${(l.constitutionLawIds||[l.id]).join(", ")}</span></h3>
+    <p class="sub" style="margin:0 0 6px">${l.title}</p>
+    ${(l.tests||[]).length ? (l.tests||[]).map(t=>html`<dl class="gwe"><dt>Given</dt><dd>${t.given}</dd><dt>When</dt><dd><code>${t.when}</code></dd><dt>Expect</dt><dd>${t.expect}</dd></dl>`) : html`<p class="sub">Manual policy review: no executable case.</p>`}
+  </div>`)}</div>`);
+}
+/** Law -> test specification: scrolls to the Step 2 law whose cases cover this constitution law. */
+function showSpecFor(lawId){
+  const cards = [...document.querySelectorAll("#lawTests [data-spec]")];
+  const card = cards.find(c=>c.dataset.covers.split(" ").includes(lawId));
+  cards.forEach(c=>c.classList.toggle("is-focused", c===card));
+  if(!card){ showStatus($("reportStatus"), "empty", `${lawId} has no executable test specification (manual policy review).`); return; }
+  if(card.scrollIntoView) card.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block:"center" });
+}
+function prefersReducedMotion(){ return !!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+/** Hand-off to Step 2: shown once a model exists, with the counts it carries. */
+function renderHandoff(){
+  const box = $("handoff"); if(!box) return;
+  box.hidden = !STATE.constitution;
+  if(!STATE.constitution) return;
+  const cases = STATE.laws.reduce((n,l)=>n+(l.tests||[]).length,0);
+  $("handoffSummary").textContent = `${STATE.constitution.laws.length} laws, ${STATE.laws.length} test groups, ${cases} Given / When / Expect cases and ${cfgIdentities().length} identities. The Test Lab plans them; nothing has been executed.`;
+}
+/** Opens Step 2 in this tab with the current model. sessionStorage is per tab and Step 2 removes the entry on read. */
+const HANDOFF_KEY = "sentinel-x:handoff:model";
+function openInTestLab(){
+  if(!STATE.model){ showStatus($("exportStatus"), "empty", "Build the Security Twin first."); return; }
+  try{ window.sessionStorage.setItem(HANDOFF_KEY, JSON.stringify(STATE.model)); }
+  catch(e){ showStatus($("exportStatus"), "error", `Could not hand the model to the Test Lab in this browser (${e.name||e.message}). Use Download JSON and upload it in the Test Lab.`); return; }
+  window.location.assign("../2-test-lab/#from-security-twin");
 }
 function renderOutputs(){
   const m = buildTestableModel(); STATE.model = m;
@@ -428,12 +482,19 @@ function rebuild(){
   STATE.resources = r.view.resources;
   STATE.specInfo = r.view.specInfo;
   STATE.warnings = [...r.view.warnings]; // fresh each rebuild; laws may append below
-  STATE.twin = buildTwin(STATE.endpoints, STATE.resources);
-  STATE.inferences = buildInferences(STATE.endpoints, STATE.resources);
-  STATE.constitution = generateSecurityConstitution(STATE.apiModel, constitutionConfig());
-  STATE.laws = buildLegacyLaws(STATE.constitution);
-  STATE.dashboard = buildDashboard();
-  renderAll();
+  try{
+    STATE.twin = buildTwin(STATE.endpoints, STATE.resources);
+    STATE.inferences = buildInferences(STATE.endpoints, STATE.resources);
+    STATE.constitution = generateSecurityConstitution(STATE.apiModel, constitutionConfig());
+    STATE.laws = buildLegacyLaws(STATE.constitution);
+    STATE.dashboard = buildDashboard();
+    renderAll();
+  }catch(e){
+    STATE.constitution = null; STATE.laws = []; STATE.dashboard = null;
+    showStatus($("buildStatus"), "error", `The model was parsed, but generating the twin and laws failed: ${e.message}`, { retry: rebuild });
+    renderAll();
+    return;
+  }
   persistWorkspace();
 }
 function build(){
@@ -480,6 +541,12 @@ async function testSandbox(){
   if(STATE.dashboard){ STATE.dashboard = buildDashboard(); renderDashboard(); renderOutputs(); }
 }
 
+/** Load the demo inputs and build in one step, then bring the summary into view. */
+async function runDemo(){
+  if(!(await loadDemo())) return;
+  build();
+  if(STATE.constitution){ const s=$("sec-summary"); if(s&&s.scrollIntoView) s.scrollIntoView({ behavior:"auto", block:"start" }); }
+}
 async function loadDemo(){
   const box = $("buildStatus");
   showStatus(box, "loading", "Loading the demo spec and configuration…");
@@ -491,10 +558,12 @@ async function loadDemo(){
     $("permissionsEditor").value = JSON.stringify(cfg.permissions,null,2);
     $("ownershipEditor").value = JSON.stringify(cfg.ownership,null,2);
     if(!$("baseUrl").value){ const a=analyzeSpecText(spec); if(a.ok&&a.view.specInfo.servers[0]) $("baseUrl").value=a.view.specInfo.servers[0]; }
-    renderTargetAuth();
-    showStatus(box, "success", "Demo spec and configuration loaded. Next: BUILD SECURITY TWIN.");
+    renderTargetAuth(); renderFlow();
+    showStatus(box, "success", "Demo spec and configuration loaded. Next: Build Security Twin.");
+    return true;
   }catch(e){
     showStatus(box, "error", `Could not load the demo: ${e.message}`, { retry: loadDemo });
+    return false;
   }
 }
 
@@ -507,7 +576,7 @@ function currentWorkspace(){
 function persistWorkspace(){
   if(!$("rememberChk").checked) return;
   const r = workspaceStore.save(currentWorkspace(), new Date().toISOString());
-  if(r.ok) showStatus($("persistStatus"), "success", `Saved in this browser at ${r.savedAt}.`);
+  if(r.ok) showStatus($("persistStatus"), "success", `Saved in this browser at ${r.savedAt}.${r.omitted.length?" The sandbox URL was not saved: it contains a user name or password.":""}`);
   else showStatus($("persistStatus"), "error", `Not saved: ${r.message}.`);
 }
 function restoreWorkspace(){
@@ -518,7 +587,7 @@ function restoreWorkspace(){
     const d = r.data;
     $("swaggerText").value = d.specText; $("identitiesEditor").value = d.identities; $("permissionsEditor").value = d.permissions;
     $("ownershipEditor").value = d.ownership; $("baseUrl").value = d.baseUrl; STATE.overrides = { ...d.overrides };
-    showStatus($("persistStatus"), "success", `Restored the spec and configuration saved in this browser at ${d.savedAt}. Next: BUILD SECURITY TWIN.`);
+    showStatus($("persistStatus"), "success", `Restored the spec and configuration saved in this browser at ${d.savedAt}. Next: Build Security Twin.`);
   } else if(r.reason==="corrupt"){
     workspaceStore.clear(); $("rememberChk").checked = false;
     showStatus($("persistStatus"), "error", "The saved data could not be read and was removed.");
@@ -539,10 +608,14 @@ window.addEventListener("DOMContentLoaded", ()=>{
   $("demoBtn").onclick = loadDemo;
   $("baseUrl").addEventListener("input", ()=>{
     renderTargetAuth();
-    if(STATE.dashboard){ STATE.dashboard = buildDashboard(); renderDashboard(); }
+    if(STATE.dashboard){ STATE.baseUrl = $("baseUrl").value.trim(); STATE.dashboard = buildDashboard(); renderDashboard(); renderOutputs(); }
   });
+  $("swaggerText").addEventListener("input", renderFlow);
+  $("demoRunBtn").onclick = runDemo;
+  $("handoffBtn").onclick = openInTestLab;
   restoreWorkspace();
   renderTargetAuth();
+  renderFlow();
   $("rememberChk").addEventListener("change", e=>{
     if(e.target.checked) persistWorkspace();
     else { workspaceStore.clear(); showStatus($("persistStatus"), "info", "Saved data removed from this browser; nothing will be remembered."); }
@@ -553,7 +626,7 @@ window.addEventListener("DOMContentLoaded", ()=>{
     const f=e.target.files[0]; if(!f) return;
     const rd=new FileReader();
     showStatus($("buildStatus"), "loading", `Reading ${f.name}…`);
-    rd.onload=()=>{ $("swaggerText").value=rd.result; showStatus($("buildStatus"), "success", `Loaded ${f.name} (${(f.size/1024).toFixed(1)} KiB). Next: BUILD SECURITY TWIN.`); };
+    rd.onload=()=>{ $("swaggerText").value=rd.result; showStatus($("buildStatus"), "success", `Loaded ${f.name} (${(f.size/1024).toFixed(1)} KiB). Next: Build Security Twin.`); };
     rd.onerror=()=>showStatus($("buildStatus"), "error", `Could not read ${f.name}: ${rd.error?rd.error.message:"unknown error"}`);
     rd.readAsText(f);
   });

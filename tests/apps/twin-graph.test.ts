@@ -27,7 +27,7 @@ const change = async (a: LoadedApp, el: HTMLSelectElement, value: string) => {
 describe("Security Twin graph in Step 1", () => {
   it("shows an empty state before a model exists", async () => {
     app = await loadApp("1-security-twin");
-    expect(app.$("twinGraph").textContent).toMatch(/Click BUILD SECURITY TWIN/);
+    expect(app.$("twinGraph").textContent).toMatch(/generated after the build/);
     expect(q(app, ".react-flow")).toHaveLength(0);
   });
 

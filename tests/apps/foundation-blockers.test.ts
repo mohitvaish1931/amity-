@@ -73,7 +73,7 @@ describe("Step 2 sandbox policy messaging", () => {
 
   it("states the policy without claiming authorization, before and after planning", async () => {
     app = await loadApp("2-test-lab");
-    expect(app.document.querySelector(".sandbox-banner")!.textContent).toMatch(/^🛡 POLICY: test only sandbox targets you are authorized to test/);
+    expect(app.document.querySelector(".sandbox-banner")!.textContent).toMatch(/^Policy · test only sandbox targets you are authorized to test/);
     expect(app.document.body.textContent).not.toMatch(CLAIM);
     app.click("demoModelBtn");
     await app.settle();

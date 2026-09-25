@@ -31,7 +31,7 @@ describe("createWorkspaceStore", () => {
     const store = createWorkspaceStore(() => mem);
     expect(store.remembered()).toBe(false);
     expect(store.load()).toEqual({ ok: false, reason: "empty" });
-    expect(store.save(ws(), "2026-09-25T00:00:00.000Z")).toEqual({ ok: true, savedAt: "2026-09-25T00:00:00.000Z" });
+    expect(store.save(ws(), "2026-09-25T00:00:00.000Z")).toEqual({ ok: true, savedAt: "2026-09-25T00:00:00.000Z", omitted: [] });
     expect(store.remembered()).toBe(true);
     expect(store.load()).toEqual({ ok: true, data: { version: 1, savedAt: "2026-09-25T00:00:00.000Z", ...ws() } });
   });
@@ -88,5 +88,16 @@ describe("createWorkspaceStore", () => {
     const raw = mem.getItem("k")!;
     expect(Object.keys(JSON.parse(raw)).sort()).toEqual(["baseUrl", "identities", "overrides", "ownership", "permissions", "savedAt", "specText", "version"]);
     expect(raw).not.toContain("secret-token");
+  });
+});
+
+describe("credentials in the sandbox URL", () => {
+  it.each(["http://user:pass@127.0.0.1:9000", "http://token@localhost:8080/api", "https://a:b@sandbox.test"])("never stores %s, and says so", (url) => {
+    const mem = new MemoryStorage();
+    const store = createWorkspaceStore(() => mem, "k");
+    expect(store.save(ws({ baseUrl: url }), "t")).toEqual({ ok: true, savedAt: "t", omitted: ["baseUrl"] });
+    const raw = mem.getItem("k")!;
+    expect(JSON.parse(raw).baseUrl).toBe("");
+    expect(raw).not.toContain("@");
   });
 });

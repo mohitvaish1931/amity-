@@ -9,7 +9,7 @@ import { copyText, fetchText, showStatus } from "../src/ui/status";
 import { PathParameterError, fillPath, lastPathParam, pathParamNames } from "../src/paths/index";
 import { assessTargetHost, findTarget, registerTarget, resolveRequestUrl } from "../src/target/policy";
 import { validateTestableModel } from "../src/testlab/model";
-// import removed for unused variables
+import { UNRATED, exportTestPlanJson, exportTestPlanMarkdown, filterOptions, filterTests } from "../src/testlab/plan";
 const $ = (id) => document.getElementById(id);
 // Documented constants (see docs/TEST_LAB.md). None of them is a result or a score.
 /** AUTHN law: anonymous probes are generated for at most this many protected endpoints; the rest are listed as a planner warning. */
@@ -197,7 +197,6 @@ function mockBody(resource, objectId){
 }
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 async function mockRequest(test, overridePath){
-  const t0=performance.now();
   await sleep(MOCK_STEP_MS);
   const path=overridePath||test.target.path;
   const ident=(S.model.testIdentities||[]).find(i=>i.id===test.identityId);
@@ -219,13 +218,13 @@ async function mockRequest(test, overridePath){
     else { status=403; body={error:"forbidden"}; }
   }
   else { status=200; body={result:"ok"}; }
-  const ms=Math.round(performance.now()-t0);
-  return { status, headers:{"content-type":"application/json"}, body, ms, url:(S.sandboxUrl||"mock")+path,
+  // Nothing is sent: the result names no host and reports no latency.
+  return { status, headers:{"content-type":"application/json"}, body, ms:null, url:`(simulated, no request sent) ${path}`,
     request:{method:test.target.method,path,identity:test.identityId,auth:"simulated-identity (mock only)"}, mock:true, mode:S.mockMode };
 }
 async function liveRequest(test){
   // Gate: THIS exact URL must be a registered sandbox target, and the request must stay inside it.
-  const target=findTarget(S.targets, S.sandboxUrl);
+  const target=S.runContext&&S.runContext.mode==="live"?S.runContext.target:null;
   if(!target) throw new Error("Live run blocked: this sandbox URL is not a registered target. Register it first (loopback, private-network or reserved hosts only).");
   const url=resolveRequestUrl(target, test.target.path);
   // Cookie jar only runs if the user confirms the sandbox actually supports credentialed requests.
@@ -250,7 +249,7 @@ async function liveRequest(test){
 }
 async function execTest(test, overridePath){
   if(test.skip) return {skipped:true};
-  if(S.execMode==="live") return liveRequest(test);
+  if(runMode()==="live") return liveRequest(test);
   return mockRequest(test, overridePath);
 }
 // Real multi-step execution: every step is sent in order, each with its own
@@ -259,7 +258,7 @@ async function execSequence(test){
   const out=[];
   for(const s of (test.steps||[])){
     const t2=Object.assign({},test,{target:Object.assign({},test.target,{path:s.path}),objectId:s.objectId});
-    const resp = S.execMode==="live" ? await liveRequest(t2) : await mockRequest(t2, s.path);
+    const resp = runMode()==="live" ? await liveRequest(t2) : await mockRequest(t2, s.path);
     const an = analyze(Object.assign({},test,{expectedDeny:s.expectedDeny,objectId:s.objectId}), resp, out.length?out[0].resp:null);
     out.push({label:s.label,path:s.path,objectId:s.objectId,expectedDeny:s.expectedDeny,resp,analysis:an});
   }
@@ -305,19 +304,38 @@ async function confirm(test, resp, analysis){
   if(r2.status!==resp.status){ steps.push("flaky (status changed) → REJECTED as false positive"); return {status:"REJECTED",steps,confirmed:false,repeat:r2}; }
   if(test.objectId){ const o=ownerOf(test.objectId); steps.push(o?`ownership: object ${test.objectId} owner=${o}, requester=${test.identityId} → ${o===test.identityId?"own":"FOREIGN confirmed"}`:"ownership: unknown object → REJECTED"); if(!o||o===test.identityId){ steps.push("not foreign → REJECTED"); return {status:"REJECTED",steps,confirmed:false,repeat:r2}; } }
   if(test.kind==="BOLA"||test.kind==="DATA"||test.kind==="SEQUENCE"){
-    if(analysis.sensFound.length) steps.push(`${S.execMode==="mock"?"sensitive fields present in the simulated response":"sensitive data confirmed"}: ${analysis.sensFound.slice(0,5).join(", ")}`);
+    if(analysis.sensFound.length) steps.push(`${runMode()==="mock"?"sensitive fields present in the simulated response":"sensitive data confirmed"}: ${analysis.sensFound.slice(0,5).join(", ")}`);
     else if(r2.status===200) steps.push("object data returned cross-owner (no flagged fields, still boundary failure)");
     else { steps.push("no data returned → REJECTED"); return {status:"REJECTED",steps,confirmed:false,repeat:r2}; }
   }
   // A mock run only simulates the sandbox: its reasoning trail must not claim a confirmation.
-  steps.push(S.execMode==="mock"?"SIMULATED (a live sandbox run would be needed to confirm)":"CONFIRMED");
+  steps.push(runMode()==="mock"?"SIMULATED (a live sandbox run would be needed to confirm)":"CONFIRMED");
   return {status:"CONFIRMED",steps,confirmed:true,repeat:r2};
 }
 
 // ---------- runner ----------
+/** Mode of the run in progress (or of the selection when idle). */
+function runMode(){ return S.runContext&&S.running ? S.runContext.mode : S.execMode; }
+/**
+ * Preflight before any case runs: a live run needs a URL and a registered target for exactly that URL.
+ * Returns the context the whole run uses (mode + locked target), or null with a visible reason.
+ */
+function beginRun(){
+  if(S.execMode!=="live"){ clearRunStatus(); return { mode:"mock", mockMode:S.mockMode, target:null, startedAt:new Date().toISOString() }; }
+  const url=($("sandboxUrl").value||"").trim();
+  if(!url){ showStatus($("runStatus"), "error", "Live run blocked: enter the sandbox base URL and register it as a target first. Nothing was sent."); return null; }
+  const target=findTarget(S.targets, url);
+  if(!target){ showStatus($("runStatus"), "error", `Live run blocked: ${url} is not a registered target. Register it first (loopback, private-network or reserved hosts only). Nothing was sent.`); return null; }
+  clearRunStatus();
+  return { mode:"live", mockMode:null, target, startedAt:new Date().toISOString() };
+}
+function clearRunStatus(){ const el=$("runStatus"); if(el){ el.textContent=""; delete el.dataset.status; } }
+/** Where a result came from, recorded on the result itself. */
+function executedAgainst(){ return S.runContext&&S.runContext.mode==="live" ? S.runContext.target.baseUrl : "simulated (mock, no request sent)"; }
 async function runOne(id){
   const t=S.tests.find(x=>x.id===id); if(!t||S.running) return;
-  S.running=true;
+  const ctx=beginRun(); if(!ctx) return;
+  S.runContext=ctx; S.running=true; updateBtns();
   try{
     log(`${t.id} ${t.lawId} ${t.kind} → ${t.target.method} ${t.target.path} as ${t.identityId||"anonymous"} (expect ${t.expectText})`);
     if(t.skip){ S.results[t.id]={status:"SKIPPED",reason:"policy review — no executable endpoint",test:t}; renderAll(); return; }
@@ -333,16 +351,17 @@ async function runOne(id){
       an=analyze(t,resp,baseline);
     }
     const cf=await confirm(t,resp,an);
-    S.results[t.id]={status:cf.status==="CONFIRMED"?"VIOLATION":cf.status,test:t,resp,repeat:cf.repeat||null,baseline,stepResults,analysis:an,steps:cf.steps,reason:cf.status==="PASS"?an.reason:cf.steps.join(" → ")};
+    S.results[t.id]={status:cf.status==="CONFIRMED"?"VIOLATION":cf.status,test:t,resp,repeat:cf.repeat||null,baseline,stepResults,analysis:an,steps:cf.steps,reason:cf.status==="PASS"?an.reason:cf.steps.join(" → "),executedAgainst:executedAgainst()};
     log(`${t.id} = ${S.results[t.id].status} (${resp.status}${cf.repeat?"/"+cf.repeat.status:""})`);
     if(cf.status==="CONFIRMED") buildFindings();
     renderAll();
   } catch(e){ S.results[t.id]={status:"ERROR",reason:String(e.message||e),test:t}; log(`${t.id} ERROR ${e.message}`); renderAll(); }
-  finally { S.running=false; updateBtns(); }
+  finally { S.running=false; updateBtns(); renderPreview(); }
 }
 async function runAll(){
   if(S.running||!S.tests.length) return;
-  S.running=true;
+  const ctx=beginRun(); if(!ctx) return;
+  S.runContext=ctx; S.running=true; updateBtns();
   try{
     for(const t of S.tests){
       if(t.skip){ S.results[t.id]={status:"SKIPPED",reason:"policy review",test:t}; continue; }
@@ -360,7 +379,7 @@ async function runAll(){
           an=analyze(t,resp,baseline);
         }
         const cf=await confirm(t,resp,an);
-        S.results[t.id]={status:cf.status==="CONFIRMED"?"VIOLATION":cf.status,test:t,resp,repeat:cf.repeat||null,baseline,stepResults,analysis:an,steps:cf.steps,reason:cf.status==="PASS"?an.reason:cf.steps.join(" → ")};
+        S.results[t.id]={status:cf.status==="CONFIRMED"?"VIOLATION":cf.status,test:t,resp,repeat:cf.repeat||null,baseline,stepResults,analysis:an,steps:cf.steps,reason:cf.status==="PASS"?an.reason:cf.steps.join(" → "),executedAgainst:executedAgainst()};
         log(`${t.id} = ${S.results[t.id].status}`);
       }catch(e){ S.results[t.id]={status:"ERROR",reason:String(e.message||e),test:t}; log(`${t.id} ERROR ${e.message}`); }
       renderAll();
@@ -369,11 +388,18 @@ async function runAll(){
     buildFindings();
     renderAll();
     log(`done: ${Object.values(S.results).filter(r=>r.status==="PASS").length} pass, ${Object.values(S.results).filter(r=>r.status==="VIOLATION").length} violations, ${Object.values(S.results).filter(r=>r.status==="REJECTED").length} rejected`);
-  } finally { S.running=false; updateBtns(); }
+  } finally { S.running=false; updateBtns(); renderPreview(); }
 }
 
 // ---------- findings + evidence ----------
 const TYPE_LABEL={BOLA:"BOLA / IDOR",ADMIN:"Broken Function-Level Authorization",DATA:"Excessive Data Exposure",AUTHN:"Authentication",ROLE:"Role Boundary",SEQUENCE:"Sequence / Context-Reuse",POLICY:"Policy"};
+/** Reproduction header for curl: always a placeholder named after the identity, never a credential value. */
+function curlAuthFor(test){
+  if(!test.identityId) return "";
+  if(isCookieScheme()) return ` -b "<cookies-from-sandbox-login>"`;
+  if(S.auth.scheme==="apiKey") return ` -H "${S.auth.apiKeyName||"X-API-Key"}: <key-for-${test.identityId}>"`;
+  return ` -H "Authorization: Bearer <token-for-${test.identityId}>"`;
+}
 function buildFindings(){
   const out=[]; let n=1;
   for(const id of Object.keys(S.results)){
@@ -381,28 +407,31 @@ function buildFindings(){
     const law=(S.model.laws||[]).find(l=>l.id===r.test.lawId)||{};
     // No fabricated percentages: report the law's own confidence level. Mock runs are simulations, never confirmations.
     const conf=law.confidence||"UNRATED";
-    const simulated=S.execMode==="mock";
-    const curlAuth = r.test.identityId ? (isCookieScheme()?` -b "<cookies-from-sandbox-login>"`:` -H "${authnHeaderPreview(r.test)}"`): "";
+    const simulated=!(S.runContext&&S.runContext.mode==="live");
+    const curlAuth = curlAuthFor(r.test);
     out.push({ id:"FINDING-"+String(n++).padStart(3,"0"), type:TYPE_LABEL[r.test.kind]||r.test.kind,
-      law:r.test.lawId, endpoint:`${r.test.target.method} ${r.test.target.pathTemplate}`, severity:law.severity||"Medium",
+      law:r.test.lawId, endpoint:`${r.test.target.method} ${r.test.target.pathTemplate}`, severity:law.severity||UNRATED,
       identity:r.test.identityId, identityName:nameOf(r.test.identityId),
       ownResource:r.test.baseObjectId||null, foreignResource:r.test.objectId||null,
       expected:r.test.expectText, observed:`HTTP ${r.resp.status}`,
       sensitiveData:r.analysis.sensFound||[], confidence:conf, status:simulated?"SIMULATED":"CONFIRMED", simulated,
       mutation:r.test.mutation, hypothesis:r.test.hypothesis, hypothesisSource:r.test.hypothesisSource||"heuristic",
-      authScheme:S.execMode==="live"?S.auth.scheme:"simulated-identity (mock)",
+      authScheme:simulated?"simulated-identity (mock)":S.auth.scheme,
       sequenceProof:(r.stepResults||[]).map(s=>({label:s.label,expected:s.expectedDeny?"DENY":"ALLOW",
         request:s.resp.request||{method:r.test.target.method,path:s.path,identity:r.test.identityId},
         response:{status:s.resp.status,body:s.resp.body,ms:s.resp.ms},
         ownership:s.analysis.rel,owner:s.analysis.owner,sensitive:s.analysis.sensFound,stepVerdict:s.analysis.verdict})),
-      reproduction:{ steps:[`Authenticate as ${r.test.identityId} with the configured ${S.execMode==="live"?S.auth.scheme:"mock"} credential`,`Send ${r.test.target.method} ${(S.sandboxUrl||"")}${r.test.target.path}`,`Observe HTTP ${r.resp.status} and compare to expected ${r.test.expectText}`],
-        curl:`curl -X ${r.test.target.method} "${(S.sandboxUrl||"")}${r.test.target.path}"${curlAuth}` },
+      reproduction:{ steps:[`Authenticate as ${r.test.identityId} with the configured ${simulated?"sandbox":S.auth.scheme} credential`,`Send ${r.test.target.method} ${reproBase()}${r.test.target.path}`,`Observe HTTP ${r.resp.status} and compare to expected ${r.test.expectText}`],
+        curl:`curl -X ${r.test.target.method} "${reproBase()}${r.test.target.path}"${curlAuth}` },
       evidence:{ request:r.resp.request, response:{status:r.resp.status,body:r.resp.body,ms:r.resp.ms}, baseline:r.baseline?{status:r.baseline.status,body:r.baseline.body}:null, repeat:r.repeat?{status:r.repeat.status}:null, confirmation:r.steps } });
   }
   S.findings=out;
 }
+/** Base URL for reproduction steps: the target a live run used, or a placeholder for a simulated finding. */
+function reproBase(){ return S.runContext&&S.runContext.mode==="live" ? S.runContext.target.baseUrl : "<registered-sandbox-url>"; }
 function evidencePackage(){
   return { version:"part2-v2-evidence", sandboxOnly:true, sandboxUrl:S.sandboxUrl,
+    run:S.runContext?{ mode:S.runContext.mode, mockMode:S.runContext.mockMode, executedAgainst:executedAgainst(), startedAt:S.runContext.startedAt }:null,
     targets:S.targets.map(t=>({...t, note:"authorization stated by the user at registration; not independently verified"})),
     executor:S.execMode, mockMode:S.execMode==="mock"?S.mockMode:null,
     auth:{scheme:S.execMode==="live"?S.auth.scheme:"simulated-identity (mock)",credentialsConfigured:Object.keys(S.auth.creds||{}).length,secretValues:"never exported",
@@ -417,15 +446,79 @@ function evidencePackage(){
 }
 
 // ---------- render (all output goes through html``/setHtml, which escape every interpolated value) ----------
-function renderAll(){ renderPlanner(); renderTargets(); renderTests(); renderPreview(); renderResults(); renderMatrix(); renderFindings(); updateBtns(); }
-function updateBtns(){ renderTargetBar(); $("runAllBtn").disabled=!S.tests.length||S.running; $("resetBtn").disabled=!Object.keys(S.results).length; $("dlEvidence").disabled=!S.findings.length; $("copyEvidence").disabled=!S.findings.length; }
+function renderAll(){ renderPlanner(); renderTargets(); renderFilters(); renderTests(); renderPreview(); renderResults(); renderMatrix(); renderFindings(); updateBtns(); }
+function updateBtns(){
+  renderTargetBar(); renderFlow();
+  $("runAllBtn").disabled=!S.tests.length||S.running; $("resetBtn").disabled=!Object.keys(S.results).length||S.running;
+  $("dlEvidence").disabled=!S.findings.length; $("copyEvidence").disabled=!S.findings.length;
+  $("planExportJson").disabled=!S.tests.length; $("planExportMd").disabled=!S.tests.length;
+  // The target and mode cannot change under a running test.
+  ["sandboxUrl","execMode","mockMode","planBtn","demoPlanBtn"].forEach(id=>{ if($(id)) $(id).disabled=S.running; });
+}
+/** Progress through the Test Lab flow, from real state only. */
+function renderFlow(){
+  const url=($("sandboxUrl").value||"").trim();
+  const registered=!!findTarget(S.targets, url);
+  const ran=Object.keys(S.results).length;
+  const steps=[
+    { done:!!S.model, detail:S.model?`${S.model.laws.length} laws · ${S.model.endpoints.length} endpoints`:"from Step 1" },
+    { done:!!S.model&&(S.execMode==="mock"||registered), detail:S.execMode==="mock"?"mock executor (simulated)":registered?"registered sandbox":url?"not registered":"no URL" },
+    { done:S.tests.length>0, detail:S.tests.length?`${S.tests.length} cases`:"laws to cases" },
+    { done:ran>0, detail:ran?`${ran}/${S.tests.length} run`:S.tests.length?"inspect and run":"inspect and run" },
+    { done:false, detail:S.findings.length?`${S.findings.length} finding${S.findings.length===1?"":"s"}${runMode()==="mock"?" (simulated)":""}`:S.tests.length?"specs ready to export":"specs and evidence" },
+  ];
+  const current=steps.findIndex(x=>!x.done);
+  document.querySelectorAll("#flow > li").forEach((li,i)=>{ const st=steps[i]; if(!st) return;
+    li.dataset.state=st.done?"done":i===current?"current":"todo";
+    const d=li.querySelector(".flow-detail"); if(d) d.textContent=st.detail;
+    const a=li.querySelector("a"); if(a){ if(li.dataset.state==="current") a.setAttribute("aria-current","step"); else a.removeAttribute("aria-current"); } });
+}
 function renderPlanner(){
-  if(!S.model){ $("planner").textContent="—"; return; }
-  const cond=S.model.laws.length, cases=S.tests.length;
+  if(!S.model){ setHtml($("planner"), html`<div class="empty">Plan tests to see how each law expands into cases.</div>`); return; }
+  const cases=S.tests.length, active=$("testLaw").value;
   setHtml($("planner"), html`<div class="tiles"><div class="tile"><b>${S.model.laws.length}</b><span class="sub">laws</span></div>
-  <div class="tile"><b>${cond}</b><span class="sub">conditions</span></div><div class="tile"><b>${cases}</b><span class="sub">cases</span></div>
+  <div class="tile"><b>${cases}</b><span class="sub">cases</span></div>
+  <div class="tile"><b>${new Set(S.tests.map(t=>t.target.method+" "+t.target.pathTemplate)).size}</b><span class="sub">endpoints targeted</span></div>
   <div class="tile"><b>${(S.model.testIdentities||[]).length}</b><span class="sub">identities</span></div></div>
-  <table><tr><th scope="col">Law</th><th scope="col">Category</th><th scope="col">Cases</th><th scope="col">Priority</th></tr>${S.model.laws.map(l=>{ const ts=S.tests.filter(t=>t.lawId===l.id); return html`<tr><td><code>${l.id}</code> ${l.title||""}</td><td>${l.category}</td><td>${ts.length}</td><td>${ts.length?Math.min(...ts.map(t=>t.priority)):"—"}</td></tr>`; })}</table>${(S.planWarnings||[]).length?html`<div class="note">${joinHtml(S.planWarnings, html`<br>`)}</div>`:""}`);
+  <div class="table-wrap"><table><tr><th scope="col">Law</th><th scope="col">Category</th><th scope="col">Severity</th><th scope="col">Confidence</th><th scope="col">Cases</th><th scope="col">Priority</th></tr>${S.model.laws.map(l=>{ const ts=S.tests.filter(t=>t.lawId===l.id); return html`<tr><td>${ts.length?html`<button type="button" class="plan-law" data-plan-law="${l.id}" aria-pressed="${active===l.id?"true":"false"}" title="Show only the cases of ${l.id}">${l.id}</button>`:html`<code>${l.id}</code>`}<div class="sub" style="margin:2px 0 0">${l.title||""}</div></td><td>${l.category}</td><td>${l.severity||UNRATED}</td><td><span class="badge b-${l.confidence||UNRATED}">${l.confidence||UNRATED}</span></td><td>${ts.length}</td><td>${ts.length?"P"+Math.min(...ts.map(t=>t.priority)):"—"}</td></tr>`; })}</table></div>${(S.planWarnings||[]).length?html`<div class="note">${joinHtml(S.planWarnings, html`<br>`)}</div>`:""}`);
+  // Law -> test navigation: filter the specification list to this law and bring it into view.
+  document.querySelectorAll("#planner [data-plan-law]").forEach(b=>b.onclick=()=>{
+    const same=$("testLaw").value===b.dataset.planLaw;
+    $("testLaw").value=same?"":b.dataset.planLaw; applyTestFilter();
+    const w=$("sec-workspace"); if(!same&&w&&w.scrollIntoView) w.scrollIntoView({ behavior:"auto", block:"start" });
+  });
+}
+// ---------- test filters (law / severity / confidence), options and counts from the planned cases ----------
+const TEST_FILTERS=[["testLaw","id"],["testSeverity","severity"],["testConfidence","confidence"]];
+function renderFilters(){
+  const laws=S.model?S.model.laws:[];
+  for(const [id,key] of TEST_FILTERS){
+    const sel=$(id), keep=sel.value, first=sel.options[0].textContent;
+    const opts=filterOptions(S.tests, laws, key);
+    setHtml(sel, html`<option value="">${first}</option>${opts.map(o=>html`<option value="${o.value}">${o.value} (${o.tests} case${o.tests===1?"":"s"})</option>`)}`);
+    sel.value=opts.some(o=>o.value===keep)?keep:"";
+    sel.disabled=!S.tests.length;
+  }
+}
+function currentTestFilter(){
+  const one=id=>$(id).value?[$(id).value]:[];
+  const f={ lawIds:one("testLaw"), severities:one("testSeverity"), confidences:one("testConfidence") };
+  return Object.fromEntries(Object.entries(f).filter(([,v])=>v.length));
+}
+function visibleTests(){ return S.model ? filterTests(S.tests, S.model.laws, currentTestFilter()) : []; }
+function applyTestFilter(){ renderTests(); renderPlanner(); }
+function exportPlan(format){
+  if(!S.tests.length){ showStatus($("planStatus"), "empty", "Plan tests first: there is nothing to export."); return; }
+  const url=($("sandboxUrl").value||"").trim();
+  const target=findTarget(S.targets, url);
+  const shown=visibleTests();
+  const ctx={ modelVersion:S.model.version||null, generatedAt:new Date().toISOString(), filter:currentTestFilter(),
+    target:{ url:target?target.baseUrl:(url||null), registered:!!target }, executor:S.execMode, totalTests:S.tests.length };
+  try{
+    if(format==="json") download("test-specifications.json", JSON.stringify(exportTestPlanJson(shown, S.model.laws, ctx),null,2));
+    else download("test-specifications.md", exportTestPlanMarkdown(shown, S.model.laws, ctx), "text/markdown");
+    showStatus($("planStatus"), "success", `Exported ${shown.length} of ${S.tests.length} test specifications as ${format==="json"?"JSON":"Markdown"}.`);
+  }catch(e){ showStatus($("planStatus"), "error", `Export failed: ${e.message}`, { retry:()=>exportPlan(format) }); }
 }
 function targetReason(e){
   const r=[]; if(/\{.+\}/.test(e.path)) r.push("object-ID"); if(/^\/admin/i.test(e.path)||e.action==="AdminAction") r.push("admin"); if(e.method!=="GET") r.push("write"); if(e.auth) r.push("auth-required");
@@ -434,36 +527,41 @@ function targetReason(e){
   return r.join(" · ")||"—";
 }
 function renderTargets(){
-  if(!S.tests.length){ $("targets").textContent="—"; return; }
+  if(!S.tests.length){ setHtml($("targets"), html`<div class="empty">Endpoints are ranked after planning.</div>`); return; }
   const g={}; S.tests.forEach(t=>{ const k=t.target.method+" "+t.target.pathTemplate; g[k]=g[k]||{ep:k,n:0,prio:9,res:t.target.resource}; g[k].n++; g[k].prio=Math.min(g[k].prio,t.priority); });
   const rows=Object.values(g).sort((a,b)=>a.prio-b.prio).map(x=>{ const e=(S.model.endpoints||[]).find(e=>(e.method+" "+e.path)===x.ep); return html`<tr><td><code>${x.ep}</code></td><td>${x.n}</td><td>P${x.prio}</td><td class="sub">${e?targetReason(e):""}</td></tr>`; });
-  setHtml($("targets"), html`<table><tr><th scope="col">Endpoint</th><th scope="col">Cases</th><th scope="col">Prio</th><th scope="col">Why selected</th></tr>${rows}</table>`);
+  setHtml($("targets"), html`<div class="table-wrap"><table><tr><th scope="col">Endpoint</th><th scope="col">Cases</th><th scope="col">Priority</th><th scope="col">Why selected</th></tr>${rows}</table></div>`);
 }
 function renderTests(){
-  if(!S.tests.length){ $("tests").textContent="—"; return; }
-  setHtml($("tests"), html`${S.tests.map(t=>{ const r=S.results[t.id]; const st=r?r.status:(t.skip?"SKIPPED":"PENDING");
+  if(!S.tests.length){ $("testCount").textContent=""; setHtml($("tests"), html`<div class="empty">${S.model?"This model produced no test cases (no law with an eligible endpoint).":"No test cases yet. Load a model and plan tests."}</div>`); return; }
+  const shown=visibleTests();
+  $("testCount").textContent = shown.length===S.tests.length ? `Showing all ${S.tests.length} test cases.` : `Showing ${shown.length} of ${S.tests.length} test cases${shown.length?"":" (no case matches the filter)"}.`;
+  if(!shown.length){ setHtml($("tests"), html`<div class="empty">No case matches the filter.</div>`); return; }
+  setHtml($("tests"), html`${shown.map(t=>{ const r=S.results[t.id]; const st=r?r.status:(t.skip?"SKIPPED":"PENDING");
     return html`<div class="test ${S.sel===t.id?"sel":""}" data-t="${t.id}" role="button" tabindex="0" aria-pressed="${S.sel===t.id?"true":"false"}"><h3>${t.id} · ${t.lawId} · ${t.kind} <span class="badge b-${st}">${st}</span> <span class="sub">P${t.priority}</span></h3><div class="sub">[${t.hypothesisSource||"heuristic"}] ${t.hypothesis}</div><div><code>${t.target.method}</code> <code>${t.target.path}</code> as <code>${t.identityId||"anonymous"}</code> → expect ${t.expectText}</div></div>`; })}`);
   const select=d=>{ S.sel=d.dataset.t; renderTests(); renderPreview(); const again=[...document.querySelectorAll("#tests .test")].find(x=>x.dataset.t===S.sel); if(again) again.focus(); };
   document.querySelectorAll("#tests .test").forEach(d=>{ d.onclick=()=>select(d); d.onkeydown=e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); select(d); } }; });
 }
 function renderPreview(){
-  const t=S.tests.find(x=>x.id===S.sel); if(!t){ setHtml($("preview"), html`<p class="sub">Select a test.</p>`); return; }
+  const t=S.tests.find(x=>x.id===S.sel); if(!t){ setHtml($("preview"), html`<div class="empty">${S.tests.length?"Select a test case.":"Plan tests, then select a case to inspect it."}</div>`); return; }
+  const law=(S.model.laws||[]).find(l=>l.id===t.lawId)||{};
   const r=S.results[t.id];
   const noCred=S.execMode==="live"&&t.identityId&&!(S.auth.creds||{})[t.identityId]&&!isCookieScheme();
   const execution=S.execMode==="live"?(isAuthorized(S.sandboxUrl)?"REGISTERED SANDBOX TARGET":"NOT REGISTERED: register the target first")+(isCookieScheme()?(S.cookieAck?" · COOKIE SUPPORT ACKED":" · COOKIE SUPPORT NOT ACKED — run will be blocked"):""):"MOCK "+S.mockMode;
   setHtml($("preview"), html`<div class="test sel"><h3>Preview ${t.id} — ${t.lawId}</h3>
+  <div class="sub">Law ${t.lawId} · ${law.category||t.category} · severity ${law.severity||UNRATED} · confidence ${law.confidence||UNRATED}${law.title?` · ${law.title}`:""}</div>
   <div><b>Hypothesis (${t.hypothesisSource||"heuristic"} planner):</b> ${t.hypothesis}</div>
   <div><b>Identity:</b> <code>${t.identityId||"anonymous"}</code> <b>Endpoint:</b> <code>${t.target.method} ${t.target.pathTemplate}</code></div>
   <div><b>Mutation (${t.mutation.type}):</b> ${JSON.stringify(t.mutation)}</div>
   <div><b>Auth sent (live):</b> <code>${authnHeaderPreview(t)}</code>${noCred?html` <span class="warn">no credential — live run will be blocked</span>`:""}</div>
   <div class="inv">REQUEST\n${t.target.method} ${S.sandboxUrl||""}${t.target.path}\n${authnHeaderPreview(t)}\nX-Sentinel-Test: ${t.id}/${t.lawId} (tracing only, not auth)\n\nEXPECTED: ${t.expectText}\nEXECUTION: ${execution}</div>
   ${r?html`<div><b>Result:</b> <span class="badge b-${r.status}">${r.status}</span> ${r.reason||""}</div>`:""}
-  <div class="row"><button class="ghost" id="runOneBtn"${t.skip?html` disabled`:""}>RUN TEST</button><button class="ghost" id="llmOneBtn">Reword hypothesis (LLM)</button></div></div>`);
+  <div class="row" style="margin-top:10px"><button class="primary" type="button" id="runOneBtn"${t.skip||S.running?html` disabled`:""}>Run this test</button><button class="ghost" type="button" id="llmOneBtn">Reword hypothesis (LLM)</button></div></div>`);
   const b=$("runOneBtn"); if(b) b.onclick=()=>runOne(t.id);
   const l=$("llmOneBtn"); if(l) l.onclick=()=>llmEnhance(t.id);
 }
 function renderResults(){
-  const ids=Object.keys(S.results); if(!ids.length){ $("results").textContent="—"; return; }
+  const ids=Object.keys(S.results); if(!ids.length){ setHtml($("results"), html`<div class="empty">No results yet.${S.tests.length?" Run a test or run all.":""}</div>`); return; }
   setHtml($("results"), html`${ids.map(id=>{ const r=S.results[id]; const t=r.test;
     return html`<div class="test"><h3>${id} · ${t.lawId} · ${t.kind} <span class="badge b-${r.status}">${r.status}</span>${r.resp&&r.resp.mock?html` <span class="badge b-SIMULATED">SIMULATED</span>`:""}</h3>
     <div class="sub">[${t.hypothesisSource||"heuristic"}] ${t.hypothesis}</div>
@@ -471,22 +569,22 @@ function renderResults(){
     ${r.analysis?html`<div class="sub">ownership: ${r.analysis.rel}${r.analysis.owner?(" (owner "+r.analysis.owner+")"):""} · sensitive: ${(r.analysis.sensFound||[]).join(", ")||"none"}${r.analysis.sim!=null?(` · similarity ${r.analysis.sim}%`):""}</div>`:""}
     ${(r.steps||[]).length?html`<div class="sub">confirmation: ${r.steps.join(" → ")}</div>`:""}
     ${r.stepResults?html`<table><tr><th scope="col">Step</th><th scope="col">Request</th><th scope="col">Expected</th><th scope="col">Got</th><th scope="col">Step verdict</th></tr>${r.stepResults.map(s=>html`<tr><td>${s.label}</td><td><code>${s.path}</code></td><td>${s.expectedDeny?"DENY":"ALLOW"}</td><td>${s.resp.status}</td><td>${s.analysis.verdict} — ${s.analysis.reason}</td></tr>`)}</table>`:""}
-    ${r.resp?html`<div class="inv">REQ ${r.resp.request.method} ${r.resp.url}\nRES ${r.resp.status} (${r.resp.ms}ms)\n${String(JSON.stringify(r.resp.body)).slice(0,600)}</div>`:""}</div>`; })}`);
+    ${r.resp?html`<div class="inv">REQ ${r.resp.request.method} ${r.resp.url}\nRES ${r.resp.status} (${r.resp.mock?"simulated response":r.resp.ms+"ms"})\n${String(JSON.stringify(r.resp.body)).slice(0,600)}</div>`:""}</div>`; })}`);
 }
 function renderMatrix(){
-  if(!S.model){ $("matrix").textContent="—"; return; }
-  const eps=allIdGets(); if(!eps.length){ setHtml($("matrix"), html`<p class="sub">No ID endpoint.</p>`); return; }
+  if(!S.model){ setHtml($("matrix"), html`<div class="empty">The matrix appears after planning.</div>`); return; }
+  const eps=allIdGets(); if(!eps.length){ setHtml($("matrix"), html`<div class="empty">The model has no endpoint that takes an object ID.</div>`); return; }
   const ids=S.model.testIdentities||[]; const own=S.model.ownership||[];
   setHtml($("matrix"), html`${eps.map(idGet=>{
     const rows=ids.map(i=>{ const mine=own.find(o=>o.ownerId===i.id); const foreign=own.find(o=>o.ownerId!==i.id);
       const cell=(obj,exp)=>{ if(!obj) return "—"; let p; try{ p=objectPath(idGet.path,obj.objectId); }catch(e){ return "not planned — missing path parameter values"; } const hit=Object.keys(S.results).find(rid=>{ const r=S.results[rid]; return r.test.identityId===i.id&&r.test.target.path===p&&r.test.target.method===idGet.method; });
         if(!hit) return `${exp} (pending)`; const st=S.results[hit].status; return st==="PASS"?`✓ ${exp}`:`${st} (exp ${exp})`; };
       return html`<tr><td><code>${i.id}</code> (${i.role})</td><td><code>${mine?displayObjectPath(idGet.path,mine.objectId):"—"}</code><br>${cell(mine,"ALLOW")}</td><td><code>${foreign?displayObjectPath(idGet.path,foreign.objectId):"—"}</code><br>${cell(foreign,"DENY")}</td></tr>`; });
-    return html`<h3><code>${idGet.method+" "+idGet.path}</code></h3><table><tr><th scope="col">Identity</th><th scope="col">Own (expect ALLOW)</th><th scope="col">Foreign (expect DENY)</th></tr>${rows}</table>`;
+    return html`<h3><code>${idGet.method+" "+idGet.path}</code></h3><div class="table-wrap"><table><tr><th scope="col">Identity</th><th scope="col">Own (expect ALLOW)</th><th scope="col">Foreign (expect DENY)</th></tr>${rows}</table></div>`;
   })}`);
 }
 function renderFindings(){
-  if(!S.findings.length){ setHtml($("findings"), html`<p class="sub">No findings yet. Run tests. Mock-mode results are labelled SIMULATED, not confirmed.</p>`); $("evidenceOut").textContent="—"; return; }
+  if(!S.findings.length){ setHtml($("findings"), html`<div class="empty">${Object.keys(S.results).length?"No violations in the results so far.":"No findings yet. Run tests; mock-mode results are labelled SIMULATED, not confirmed."}</div>`); $("evidenceOut").textContent="—"; return; }
   setHtml($("findings"), html`${S.findings.map(f=>html`<div class="test"><h3>${f.id} · ${f.type} <span class="badge b-${f.status}">${f.status}</span> <span class="badge b-${f.confidence}">law confidence ${f.confidence}</span> [${f.severity}]</h3>
   <div>Endpoint <code>${f.endpoint}</code> · identity <code>${f.identity}</code> (${f.identityName}) · expected ${f.expected} · observed ${f.observed}</div>
   <div class="sub">own=${f.ownResource||"—"} foreign=${f.foreignResource||"—"} · sensitive: ${(f.sensitiveData||[]).join(", ")||"none"}</div>
@@ -538,6 +636,7 @@ function renderApproval(){
     renderApproval();
   };
   renderTargetBar();
+  renderFlow();
 }
 /** Always-visible statement of what a run would hit: target, environment, authorization basis, mode and run state. */
 function renderTargetBar(){
@@ -546,8 +645,10 @@ function renderTargetBar(){
   const target=findTarget(S.targets, url);
   const done=Object.keys(S.results).length;
   const run=S.running?`running (${done}/${S.tests.length})`:S.tests.length?`${done}/${S.tests.length} tests run`:"no tests planned";
-  setHtml(bar, html`<span><b>TARGET</b> <code data-testid="target-url">${url||"none"}</code></span>
-    <span data-testid="target-env">${target?html`<b>SANDBOX</b> · AUTHORIZED BY CONFIGURATION <span class="sub">(not independently verified)</span>`:html`<b class="warn">NOT REGISTERED</b>`}</span>
+  // Registered: show the normalized base URL, which is exactly the prefix every live request uses.
+  const liveFrom=S.runContext&&S.runContext.mode==="live"&&done?S.runContext.target.baseUrl:null;
+  setHtml(bar, html`<span><b>TARGET</b> <code data-testid="target-url">${target?target.baseUrl:(url||"none")}</code></span>
+    <span data-testid="target-env">${target?html`<b class="env-sandbox">SANDBOX</b> · AUTHORIZED BY CONFIGURATION <span class="sub">(not independently verified)</span>`:html`<b class="warn">NOT REGISTERED</b>`}</span>${liveFrom&&(!target||target.baseUrl!==liveFrom)?html`<span class="warn" data-testid="results-target">results below came from ${liveFrom}</span>`:""}
     <span><b>MODE</b> ${S.execMode==="live"?"Live sandbox":`Mock (simulated, ${S.mockMode})`}</span>
     <span><b>RUN</b> <span data-testid="run-state">${run}</span></span>`);
 }
@@ -599,51 +700,94 @@ function renderLlmIdeas(){
   const box=$("llmIdeas"); if(!box) return;
   setHtml(box, S.llmIdeas.length?html`<p class="sub">LLM-suggested ideas (source: llm — <b>not executed</b>, review before recreating):</p>${S.llmIdeas.map((s,i)=>html`<div class="test"><h3>Idea ${i+1} <span class="badge b-MEDIUM">llm-suggested</span></h3><div>${s}</div></div>`)}`:html`<p class="sub">No LLM suggestions yet. Heuristic planner output above is the MVP test set.</p>`);
 }
-function download(name,text){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type:"application/json"})); a.download=name; a.click(); }
+function download(name,text,type="application/json"){ const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([text],{type})); a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),0); }
 
 async function loadDemoModel(){
   showStatus($("modelStatus"), "loading", "Loading the demo model…");
   try{
     $("modelText").value = await fetchText("samples/sample-testable-model.json");
-    showStatus($("modelStatus"), "success", "Demo model loaded. Next: PLAN TESTS.");
-  }catch(e){ showStatus($("modelStatus"), "error", `Could not load the demo model: ${e.message}`, { retry: loadDemoModel }); }
+    showStatus($("modelStatus"), "success", "Demo model loaded. Next: Plan tests.");
+    return true;
+  }catch(e){ showStatus($("modelStatus"), "error", `Could not load the demo model: ${e.message}`, { retry: loadDemoModel }); return false; }
+}
+
+/** Parses, validates and plans the model in the text area. Every outcome is reported: empty, invalid, no cases, or planned. */
+function planFromText(){
+  const txt=$("modelText").value.trim();
+  if(!txt){ showStatus($("modelStatus"), "empty", "No model yet: paste testable-security-model.json, upload it, or load the demo model."); return false; }
+  let obj;
+  try{ obj=JSON.parse(txt); }catch(e){ showStatus($("modelStatus"), "error", `Invalid model: the text is not valid JSON (${e.message}).`); return false; }
+  let urlSource;
+  try{ urlSource=loadModel(obj); }
+  catch(e){ showStatus($("modelStatus"), "error", `Invalid model: ${e.message}`, { details:e.details||[] }); renderAll(); return false; }
+  S.execMode=$("execMode").value; S.mockMode=$("mockMode").value; S.sandboxUrl=$("sandboxUrl").value.trim();
+  S.auth.scheme=$("authScheme").value; S.auth.apiKeyName=$("apiKeyName").value.trim()||"X-API-Key"; S.auth.cookieName=$("cookieName").value.trim()||"session";
+  try{ planTests(); }
+  catch(e){ S.tests=[]; renderAll(); showStatus($("modelStatus"), "error", `Planning failed: ${e.message}`, { retry: planFromText }); return false; }
+  S.sel=S.tests[0]?S.tests[0].id:null;
+  $("console").textContent=`planned ${S.tests.length} cases from ${S.model.laws.length} laws (${S.execMode}${S.execMode==="mock"?"-"+S.mockMode:""}).`;
+  log(`planner: ${S.model.laws.length} laws → ${S.tests.length} cases (heuristic; all eligible endpoints)${(S.planWarnings||[]).length?" — "+S.planWarnings.join("; "):""}`);
+  renderAll(); renderAuth(); renderApproval();
+  const notes=[...(S.modelWarnings||[])];
+  if(urlSource==="model") notes.push(`Target URL taken from the model (${S.sandboxUrl}); edit it above if it is not your sandbox.`);
+  if(urlSource==="none") notes.push("The model names no sandbox URL: mock runs work; enter one to run live.");
+  showStatus($("modelStatus"), S.tests.length?"success":"empty", S.tests.length ? `Planned ${S.tests.length} test cases from ${S.model.laws.length} laws.` : "The model produced no test cases (no laws with eligible endpoints).", { details:notes });
+  return S.tests.length>0;
+}
+
+/** Step 1 → Step 2 in the same tab: the model arrives through sessionStorage and is removed as soon as it is read. */
+const HANDOFF_KEY="sentinel-x:handoff:model";
+function receiveHandoff(){
+  let text=null;
+  try{ text=window.sessionStorage.getItem(HANDOFF_KEY); if(text!==null) window.sessionStorage.removeItem(HANDOFF_KEY); }catch(e){ text=null; }
+  const fromTwin=location.hash==="#from-security-twin";
+  // One-shot: a reload must neither replay the hand-off nor report it missing.
+  if(fromTwin){ try{ history.replaceState(null, "", location.pathname+location.search); }catch(e){ /* history unavailable: harmless */ } }
+  if(text===null){
+    if(fromTwin) showStatus($("modelStatus"), "error", "No model arrived from the Security Twin (browser storage unavailable or already used). Use Download JSON in Step 1 and upload it here.");
+    return;
+  }
+  $("modelText").value=text;
+  if(planFromText()) showStatus($("modelStatus"), "success", `Model received from the Security Twin and planned: ${S.tests.length} test cases from ${S.model.laws.length} laws. Nothing has been executed.`);
+}
+
+async function runDemo(){
+  if(!(await loadDemoModel())) return;
+  $("execMode").value="mock"; S.execMode="mock";
+  if(planFromText()){ const w=$("sec-plan"); if(w&&w.scrollIntoView) w.scrollIntoView({ behavior:"auto", block:"start" }); }
 }
 
 window.addEventListener("DOMContentLoaded",()=>{
   $("demoModelBtn").onclick=loadDemoModel;
+  $("demoPlanBtn").onclick=runDemo;
   $("fileBtn").onclick=()=>$("modelFile").click();
   $("modelFile").addEventListener("change",e=>{
     const f=e.target.files[0]; if(!f) return;
     const rd=new FileReader();
     showStatus($("modelStatus"), "loading", `Reading ${f.name}…`);
-    rd.onload=()=>{ $("modelText").value=rd.result; showStatus($("modelStatus"), "success", `Loaded ${f.name}. Next: PLAN TESTS.`); };
+    rd.onload=()=>{ $("modelText").value=rd.result; showStatus($("modelStatus"), "success", `Loaded ${f.name}. Next: Plan tests.`); };
     rd.onerror=()=>showStatus($("modelStatus"), "error", `Could not read ${f.name}: ${rd.error?rd.error.message:"unknown error"}`);
     rd.readAsText(f);
   });
-  $("planBtn").onclick=()=>{
-    const txt=$("modelText").value.trim(); if(!txt){ showStatus($("modelStatus"), "empty", "No model yet: paste testable-security-model.json, upload it, or load the demo model."); return; }
-    try{ loadModel(JSON.parse(txt)); }catch(e){ showStatus($("modelStatus"), "error", `Invalid model: ${e.message}`); return; }
-    S.execMode=$("execMode").value; S.mockMode=$("mockMode").value; S.sandboxUrl=$("sandboxUrl").value.trim();
-    S.auth.scheme=$("authScheme").value; S.auth.apiKeyName=$("apiKeyName").value.trim()||"X-API-Key"; S.auth.cookieName=$("cookieName").value.trim()||"session";
-    planTests(); S.sel=S.tests[0]?S.tests[0].id:null;
-    $("console").textContent=`planned ${S.tests.length} cases from ${S.model.laws.length} laws (${S.execMode}${S.execMode==="mock"?"-"+S.mockMode:""}).`;
-    log(`planner: ${S.model.laws.length} laws → ${S.tests.length} cases (heuristic; all eligible endpoints)${(S.planWarnings||[]).length?" — "+S.planWarnings.join("; "):""}`);
-    renderAll(); renderAuth();
-    showStatus($("modelStatus"), S.tests.length?"success":"empty", S.tests.length ? `Planned ${S.tests.length} test cases from ${S.model.laws.length} laws.` : "The model produced no test cases (no laws with eligible endpoints).");
-  };
-  $("execMode").onchange=e=>{ S.execMode=e.target.value; renderAll(); renderApproval(); };
+  $("planBtn").onclick=planFromText;
+  $("execMode").onchange=e=>{ S.execMode=e.target.value; clearRunStatus(); renderAll(); renderApproval(); };
   $("mockMode").onchange=e=>{ S.mockMode=e.target.value; renderTargetBar(); };
   $("authScheme").onchange=e=>{ S.auth.scheme=e.target.value; renderAuth(); renderPreview(); };
   $("runAllBtn").onclick=runAll;
-  $("resetBtn").onclick=()=>{ S.results={}; S.findings=[]; renderAll(); $("console").textContent="reset."; };
+  $("resetBtn").onclick=()=>{ S.results={}; S.findings=[]; S.runContext=null; clearRunStatus(); renderAll(); $("console").textContent="reset."; };
+  TEST_FILTERS.forEach(([id])=>$(id).addEventListener("change", applyTestFilter));
+  $("planExportJson").onclick=()=>exportPlan("json");
+  $("planExportMd").onclick=()=>exportPlan("md");
   $("llmAllBtn").onclick=()=>llmEnhance(null);
   $("llmSuggestBtn").onclick=()=>llmSuggest();
   $("llmEnable").onchange=e=>{ S.llm.enabled=e.target.checked; };
-  $("sandboxUrl").oninput=()=>{ S.sandboxUrl=$("sandboxUrl").value.trim(); renderApproval(); };
+  $("sandboxUrl").oninput=()=>{ S.sandboxUrl=$("sandboxUrl").value.trim(); clearRunStatus(); renderApproval(); renderFlow(); renderPreview(); };
   $("dlEvidence").onclick=()=>download("evidence-package.json",JSON.stringify(evidencePackage(),null,2));
   $("copyEvidence").onclick=async()=>{
     try{ await copyText(JSON.stringify(evidencePackage(),null,2)); showStatus($("evidenceStatus"), "success", "Evidence package copied."); }
     catch(e){ showStatus($("evidenceStatus"), "error", `Copy failed (${e.message}). Use Download instead.`); }
   };
   renderApproval();
+  renderAll();
+  receiveHandoff();
 });

@@ -4,73 +4,146 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <!-- Scripts only from this origin (no inline script); connect-src stays open to http(s) because the user supplies the sandbox (and optional LLM) URL, which the target policy in src/target/policy.ts then restricts. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' http: https:; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>Sentinel X Lab — Part 2: Test Lab</title>
+<title>Sentinel X — Test Lab</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="sandbox-banner">🛡 POLICY: test only sandbox targets you are authorized to test · production testing is prohibited</div>
+<a class="skip-link" href="#main">Skip to content</a>
+<!-- Visible only when this page is opened without the build (app.css hides it). -->
+<div class="build-required" role="alert" style="margin:16px;padding:14px 16px;border:1px solid #b91c1c;border-radius:8px;background:#fef2f2;color:#7f1d1d;font:14px/1.5 system-ui,sans-serif">
+  <b>This page must be opened from the build.</b> The source folder has no compiled scripts or styles.
+  Run <code>npm start</code> in the project folder, then open <code>http://127.0.0.1:8000/2-test-lab/</code>.
+</div>
+<div class="sandbox-banner"><b>Policy</b> · test only sandbox targets you are authorized to test · production testing is prohibited</div>
+<header class="topbar">
+  <a class="brand" href="../1-security-twin/" aria-label="Sentinel X home">
+    <span class="brand-mark" aria-hidden="true"><i class="icon icon-shield"></i></span>
+    <span><span class="brand-name">SENTINEL X</span><span class="brand-tag">API security modelling</span></span>
+  </a>
+  <nav class="app-nav" aria-label="Application">
+    <a href="../1-security-twin/"><span class="nav-no">1</span><span class="nav-label">Security Twin</span></a>
+    <a href="../2-test-lab/" aria-current="page"><span class="nav-no">2</span><span class="nav-label">Test Lab</span></a>
+  </nav>
+</header>
 <div class="target-bar" id="targetBar" role="region" aria-label="Target and run status"></div>
-<div class="wrap">
-<header><h1>SENTINEL X LAB — Part 2: Test Lab</h1>
-<p>Part 1 laws ▼ → Test Planner → Mutation → Sandbox Execution → Expected vs Actual → Evidence Package (export)</p></header>
+<nav class="flow" aria-label="Progress"><ol id="flow">
+  <li data-state="current"><a href="#sec-setup"><span class="flow-no">1</span><span class="flow-text"><span class="flow-label">Security model</span><span class="flow-detail">from Step 1</span></span></a></li>
+  <li data-state="todo"><a href="#sec-setup"><span class="flow-no">2</span><span class="flow-text"><span class="flow-label">Target</span><span class="flow-detail">sandbox and executor</span></span></a></li>
+  <li data-state="todo"><a href="#sec-plan"><span class="flow-no">3</span><span class="flow-text"><span class="flow-label">Test plan</span><span class="flow-detail">laws to cases</span></span></a></li>
+  <li data-state="todo"><a href="#sec-workspace"><span class="flow-no">4</span><span class="flow-text"><span class="flow-label">Specifications</span><span class="flow-detail">inspect and run</span></span></a></li>
+  <li data-state="todo"><a href="#sec-report"><span class="flow-no">5</span><span class="flow-text"><span class="flow-label">Report</span><span class="flow-detail">specs and evidence</span></span></a></li>
+</ol></nav>
 
-<div class="card"><h2>1️⃣ Receive Part 1 Security Model</h2><p class="sub">Import <code>testable-security-model.json</code> (Part 1 → Download). Part 2 consumes it — no logic recreated.</p>
-<textarea id="modelText" aria-label="Testable security model JSON" placeholder='Paste testable-security-model.json here, or Load Demo Model'></textarea>
-<div class="row"><button class="ghost" id="demoModelBtn">Load Demo Model</button><button class="ghost" id="fileBtn">Upload JSON</button><input type="file" id="modelFile" accept=".json" hidden aria-label="Testable security model file"></div>
-<label for="sandboxUrl">Sandbox Base URL (from model, editable)</label><input type="text" id="sandboxUrl" placeholder="https://your-authorized-sandbox.example (filled from the model if empty)">
-<div id="approvalBox"><p class="sub">Enter the sandbox base URL to register it as a target.</p></div>
-<div class="op-status" id="targetStatus" role="status" aria-live="polite"></div>
-<div class="row"><label style="margin:0" for="execMode">Executor:</label><select id="execMode"><option value="mock">Mock Sandbox (demo, data-driven)</option><option value="live">Live Sandbox (real fetch to a registered target, your credentials)</option></select>
-<label style="margin:0" for="mockMode">Mock behavior:</label><select id="mockMode"><option value="vulnerable">Vulnerable (demo violations)</option><option value="secure">Secure (laws satisfied)</option></select></div>
-<div class="row"><button class="primary" type="button" id="planBtn">[ PLAN TESTS ]</button><span class="sub" id="modelInfo">No model loaded.</span></div>
+<div class="shell">
+<main class="wrap" id="main" tabindex="-1">
+<section class="page-head" aria-labelledby="pageTitle">
+  <div>
+    <p class="eyebrow">Step 2 · Test Lab</p>
+    <h1 id="pageTitle">Plan authorization tests from the security laws</h1>
+    <p class="lede">The Test Lab turns each law from Step 1 into concrete cases: who sends which request, what must happen, and why. Mock runs are simulations and say so; live runs only reach a sandbox you register.</p>
+  </div>
+  <div class="actions"><button class="primary lg" type="button" id="demoPlanBtn">Run the demo</button></div>
+</section>
+
+<section class="card" id="sec-setup" aria-labelledby="h-setup">
+<div class="card-head"><span class="step-no">01</span><div><h2 id="h-setup">Security model &amp; target</h2><p class="why"><b>Why it matters:</b> the Test Lab adds no logic of its own. It plans from the laws in the model, and it can only send requests to a target you explicitly registered.</p></div></div>
+<div class="split">
+  <div>
+    <p class="panel-title">Testable security model</p>
+    <label for="modelText">testable-security-model.json <span class="hint">— from Step 1 (Open in Test Lab, or Download JSON)</span></label>
+    <textarea id="modelText" style="min-height:200px" placeholder="Paste testable-security-model.json here, upload it, or load the demo model"></textarea>
+    <div class="row" style="margin-top:8px"><button class="ghost" type="button" id="demoModelBtn">Load demo model</button><button class="ghost" type="button" id="fileBtn">Upload JSON</button><input type="file" id="modelFile" accept=".json" hidden aria-label="Testable security model file"><span class="sub" id="modelInfo" style="margin:0">No model loaded.</span></div>
+  </div>
+  <div>
+    <p class="panel-title">Target and executor</p>
+    <label for="sandboxUrl">Sandbox base URL <span class="hint">— filled from the model only when empty; always editable</span></label>
+    <input type="text" id="sandboxUrl" placeholder="http://127.0.0.1:8080 (local or private-network hosts only)">
+    <div id="approvalBox"><p class="sub">Enter the sandbox base URL to register it as a target.</p></div>
+    <div class="op-status" id="targetStatus" role="status" aria-live="polite"></div>
+    <div class="row" style="margin-top:12px">
+      <div><label for="execMode">Executor</label><select id="execMode"><option value="mock">Mock sandbox (simulated, sends nothing)</option><option value="live">Live sandbox (real requests to a registered target)</option></select></div>
+      <div><label for="mockMode">Mock behaviour</label><select id="mockMode"><option value="vulnerable">Vulnerable (shows what violations look like)</option><option value="secure">Secure (laws satisfied)</option></select></div>
+    </div>
+  </div>
+</div>
+<div class="row" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line)"><button class="primary lg" type="button" id="planBtn">Plan tests</button><span class="sub" style="margin:0">Planning is deterministic and sends no request.</span></div>
 <div class="op-status" id="modelStatus" role="status" aria-live="polite"></div>
-</div>
-
-<div class="card"><h2>🔑 Authentication (live runs)</h2><p class="sub">Your sandbox's real credentials — one per identity. Sent as proper auth headers (Bearer / API key / Cookie). Memory only: never exported to findings or evidence. Mock mode ignores these and simulates identities.</p>
-<div class="row"><label style="margin:0" for="authScheme">Scheme:</label><select id="authScheme"><option value="bearer">Bearer token</option><option value="apiKey">API key header</option><option value="cookie">Cookie — browser jar (login in this browser; cross-origin needs CORS credentials)</option><option value="none">None (anonymous only)</option></select>
-<label style="margin:0" for="apiKeyName">API-key header:</label><input type="text" id="apiKeyName" value="X-API-Key" style="width:160px">
-<label style="margin:0" for="cookieName">Cookie name (display only):</label><input type="text" id="cookieName" value="session" style="width:160px"></div>
-<div id="authBox"><p class="sub">Load a model first — credential fields appear per identity.</p></div>
-</div>
-
-<div class="card"><h2>2️⃣ Test Planner (heuristic)</h2><p class="sub">Laws → testable conditions → generated cases across <b>all</b> eligible endpoints. Hypotheses come from deterministic templates — heuristic proposes, sandbox proves. Optional LLM rewording below.</p><div id="planner">—</div></div>
-
-<div class="card"><h2>3️⃣ Target Selection</h2><p class="sub">Highest-value security boundaries first: object IDs, admin functions, sensitive data, writes, auth-required.</p><div id="targets">—</div></div>
-
-<div class="workspace">
-<section class="card" aria-labelledby="h-tests"><h2 id="h-tests">4️⃣ Test cases</h2><p class="sub">Select a test (click, or Enter / Space) to inspect it. Run one or run all.</p>
-<div class="row"><button class="ghost" type="button" id="runAllBtn" disabled>RUN ALL</button><button class="ghost" type="button" id="resetBtn" disabled>Reset results</button><button class="ghost" type="button" id="llmAllBtn">Reword all hypotheses (LLM)</button></div>
-<div id="tests" class="scroll">—</div>
 </section>
 
-<section class="card" aria-labelledby="h-exec"><h2 id="h-exec">5️⃣ Execution timeline</h2><div class="console" id="console" role="log" aria-label="Execution console">idle — plan tests first.</div>
-<h2 id="h-results" style="margin-top:14px">6️⃣ Results: expected vs actual</h2><p class="sub">Mock runs are simulations and are labelled SIMULATED. Live results come only from a registered sandbox target.</p><div id="results" class="scroll" aria-labelledby="h-results">—</div>
+<details class="card fold" id="sec-auth">
+<summary><span class="step-no" style="margin-right:6px">02</span> Credentials for live runs <span class="hint">(optional · memory only · never exported)</span></summary>
+<p class="why" style="margin-top:10px">Mock runs simulate identities and ignore this section. For live runs, enter your sandbox's own credential for each identity; it is sent as a proper auth header and held in memory only.</p>
+<div class="row" style="margin-top:4px">
+  <div><label for="authScheme">Scheme</label><select id="authScheme"><option value="bearer">Bearer token</option><option value="apiKey">API key header</option><option value="cookie">Cookie: browser jar (log in in this browser; cross-origin needs CORS credentials)</option><option value="none">None (anonymous only)</option></select></div>
+  <div><label for="apiKeyName">API-key header</label><input type="text" id="apiKeyName" value="X-API-Key" style="width:170px"></div>
+  <div><label for="cookieName">Cookie name (display only)</label><input type="text" id="cookieName" value="session" style="width:170px"></div>
+</div>
+<div id="authBox" style="margin-top:10px"><p class="sub">Load a model first: a credential field appears per identity.</p></div>
+</details>
+
+<section class="card" id="sec-plan" aria-labelledby="h-plan">
+<div class="card-head"><span class="step-no">03</span><div><h2 id="h-plan">Test plan</h2><p class="why"><b>Why it matters:</b> every law becomes cases across <b>all</b> eligible endpoints, highest-value boundaries first: object IDs, admin functions, sensitive data, writes. Select a law to see only its cases.</p></div></div>
+<div class="split">
+  <div><p class="panel-title">Laws → cases</p><div id="planner"><div class="empty">Plan tests to see how each law expands into cases.</div></div></div>
+  <div><p class="panel-title">Target selection</p><div id="targets"><div class="empty">Endpoints are ranked after planning.</div></div></div>
+</div>
 </section>
 
-<section class="card" aria-labelledby="h-inspect"><h2 id="h-inspect">🔎 Request inspector</h2><p class="sub">Hypothesis, mutation and the exact request for the selected test.</p>
-<div id="preview"><p class="sub">Select a test.</p></div>
+<div class="workspace" id="sec-workspace">
+<section class="card" aria-labelledby="h-tests"><div class="card-head" style="margin-bottom:8px"><span class="step-no">04</span><div><h2 id="h-tests">Test specifications</h2><p class="why">Select a case (click, or Enter / Space) to inspect it.</p></div></div>
+<div class="filters" role="search" aria-label="Filter test cases">
+  <div><label for="testLaw">Law</label><select id="testLaw" data-testid="filter-law" disabled><option value="">All laws</option></select></div>
+  <div><label for="testSeverity">Severity</label><select id="testSeverity" data-testid="filter-severity" disabled><option value="">All severities</option></select></div>
+  <div><label for="testConfidence">Confidence</label><select id="testConfidence" data-testid="filter-confidence" disabled><option value="">All confidence levels</option></select></div>
+</div>
+<p class="sub" id="testCount" data-testid="test-count" role="status" aria-live="polite" style="margin:8px 0 0"></p>
+<div class="row" style="margin-top:8px"><button class="primary" type="button" id="runAllBtn" disabled>Run all</button><button class="ghost" type="button" id="resetBtn" disabled>Reset results</button></div>
+<div class="op-status" id="runStatus" data-testid="run-status" role="status" aria-live="polite"></div>
+<div id="tests" class="scroll"><div class="empty">No test cases yet.</div></div>
+</section>
+
+<section class="card" aria-labelledby="h-exec"><div class="card-head" style="margin-bottom:8px"><span class="step-no">05</span><div><h2 id="h-exec">Execution timeline</h2><p class="why">Every attempted request, in order.</p></div></div>
+<div class="console" id="console" role="log" aria-label="Execution console">idle: plan tests first.</div>
+<h3 id="h-results">Results: expected vs actual</h3><p class="sub">Mock results are simulations and are labelled SIMULATED. Live results come only from a registered sandbox target.</p><div id="results" class="scroll" aria-labelledby="h-results"><div class="empty">No results yet.</div></div>
+</section>
+
+<section class="card" aria-labelledby="h-inspect"><div class="card-head" style="margin-bottom:8px"><span class="step-no">06</span><div><h2 id="h-inspect">Request inspector</h2><p class="why">Hypothesis, mutation and the exact request of the selected case.</p></div></div>
+<div id="preview"><div class="empty">Select a test case.</div></div>
 </section>
 </div>
 
-<div class="card"><h2>7️⃣ Multi-Identity Matrix</h2><p class="sub">Derived from model identities × own/foreign objects, per ID endpoint. Fills as BOLA tests complete.</p><div id="matrix">—</div></div>
+<section class="card" id="sec-matrix" aria-labelledby="h-matrix">
+<div class="card-head"><span class="step-no">07</span><div><h2 id="h-matrix">Multi-identity matrix</h2><p class="why"><b>Why it matters:</b> for every ID endpoint, each identity against its own and a foreign object. It fills in as object-authorization cases complete.</p></div></div>
+<div id="matrix"><div class="empty">The matrix appears after planning.</div></div>
+</section>
 
-<div class="card"><h2>💬 Hypothesis wording (optional LLM)</h2><p class="sub">The planner is a deterministic heuristic — not an autonomous agent, which is acceptable for MVP. Optionally: reword hypotheses, or ask your own OpenAI-compatible endpoint for extra test <b>ideas</b> (displayed only, never auto-executed). Key stays in browser memory.</p>
-<div class="row"><label style="margin:0"><input type="checkbox" id="llmEnable" style="width:auto"> Enable LLM (reword + suggestions)</label><button class="ghost" id="llmSuggestBtn">Suggest extra test ideas (LLM)</button></div>
-<label for="llmEndpoint">LLM endpoint (OpenAI-compatible chat completions URL)</label><input type="text" id="llmEndpoint" placeholder="https://api.openai.com/v1/chat/completions">
-<div class="row"><div style="flex:1"><label for="llmKey">API key</label><input type="password" id="llmKey" placeholder="sk-... (memory only)"></div><div style="flex:1"><label for="llmModel">Model</label><input type="text" id="llmModel" placeholder="model name (required)"></div></div>
+<section class="card" id="sec-report" aria-labelledby="h-report">
+<div class="card-head"><span class="step-no">08</span><div><h2 id="h-report">Report &amp; evidence</h2><p class="why"><b>Why it matters:</b> test specifications can be shared before anything runs. Findings are CONFIRMED only for live sandbox runs that passed confirmation; mock runs produce SIMULATED findings.</p></div></div>
+<div class="report-actions">
+  <div><p class="panel-title">Test specifications</p><p class="sub">The planned cases shown by the filter above. No results, no credentials.</p>
+    <div class="row"><button class="ghost" type="button" id="planExportJson" data-testid="plan-export-json" disabled>Export test specifications (JSON)</button><button class="ghost" type="button" id="planExportMd" data-testid="plan-export-md" disabled>Export test specifications (Markdown)</button></div>
+    <div class="op-status" id="planStatus" role="status" aria-live="polite"></div></div>
+  <div><p class="panel-title">Evidence package</p><p class="sub">Finding, request, response, identity, mutation, expected vs actual, reproduction and confidence.</p>
+    <div class="row"><button class="ghost" type="button" id="dlEvidence" disabled>Download evidence package</button><button class="ghost" type="button" id="copyEvidence" disabled>Copy</button></div>
+    <div class="op-status" id="evidenceStatus" role="status" aria-live="polite"></div></div>
+</div>
+<h3>Findings</h3>
+<div id="findings"><div class="empty">No findings yet. Run tests; mock-mode results are labelled SIMULATED, not confirmed.</div></div>
+<details class="fold" style="margin-top:12px"><summary>Evidence package (JSON)</summary><pre class="out" id="evidenceOut">—</pre></details>
+</section>
+
+<details class="card fold" id="sec-llm">
+<summary><span class="step-no" style="margin-right:6px">09</span> Hypothesis wording with your own LLM <span class="hint">(optional)</span></summary>
+<p class="why" style="margin-top:10px">The planner is deterministic, not an autonomous agent. Optionally, reword hypotheses or ask your own OpenAI-compatible endpoint for extra test <b>ideas</b>; ideas are displayed only, never executed. The key stays in browser memory.</p>
+<div class="row"><label class="check" for="llmEnable" style="margin:0"><input type="checkbox" id="llmEnable"> Enable LLM (reword + suggestions)</label><button class="ghost" type="button" id="llmSuggestBtn">Suggest extra test ideas</button><button class="ghost" type="button" id="llmAllBtn">Reword all hypotheses</button></div>
+<label for="llmEndpoint">LLM endpoint <span class="hint">OpenAI-compatible chat completions URL</span></label><input type="text" id="llmEndpoint" placeholder="https://…/v1/chat/completions">
+<div class="row" style="flex-wrap:nowrap"><div style="flex:1"><label for="llmKey">API key</label><input type="password" id="llmKey" placeholder="memory only"></div><div style="flex:1"><label for="llmModel">Model</label><input type="text" id="llmModel" placeholder="model name (required)"></div></div>
 <div class="op-status" id="llmStatus" role="status" aria-live="polite"></div>
-<div id="llmIdeas"><p class="sub">No LLM suggestions yet. Heuristic planner output above is the MVP test set.</p></div>
-</div>
-
-<div class="card"><h2>8️⃣ Findings → evidence export</h2><p class="sub">CONFIRMED only for live sandbox runs that passed confirmation; mock runs produce SIMULATED findings.</p><div id="findings">—</div>
-<div class="row"><button class="ghost" id="dlEvidence" disabled>Download Evidence Package</button><button class="ghost" id="copyEvidence" disabled>Copy</button></div>
-<div class="op-status" id="evidenceStatus" role="status" aria-live="polite"></div>
-<pre class="out" id="evidenceOut">—</pre>
-</div>
-<p class="sub">The evidence package contains: finding + request + response + identity + mutation + expected + actual + reproduction + confidence + evidence.</p>
-</div>
+<div id="llmIdeas" style="margin-top:10px"><p class="sub">No LLM suggestions yet. The heuristic plan above is the test set.</p></div>
+</details>
+</main>
 </div>
 <script src="app.js"></script>
 </body>

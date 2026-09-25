@@ -359,13 +359,13 @@ function GraphCanvas({ input, focus }: { input: TwinGraphInput; focus: LawFocus 
             minZoom={0.1}
             maxZoom={2}
             onlyRenderVisibleElements={graph.nodes.length > 250}
-            colorMode="dark"
+            colorMode="light"
             proOptions={{ hideAttribution: true }}
           >
             <Background gap={24} size={1} />
             <Controls showInteractive={false} />
             {graph.nodes.length > 60 && (
-              <MiniMap pannable zoomable className="twin-minimap" style={{ width: 160, height: 110 }} bgColor="#0f172a" maskColor="rgba(2, 6, 23, 0.7)" nodeColor="#334155" />
+              <MiniMap pannable zoomable className="twin-minimap" style={{ width: 160, height: 110 }} bgColor="#ffffff" maskColor="rgba(241, 245, 249, 0.75)" nodeColor="#cbd5e1" />
             )}
           </ReactFlow>
         </div>

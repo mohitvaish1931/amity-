@@ -1,5 +1,7 @@
 // Opt-in, per-browser save/restore of Step 1 inputs (spec, configuration, sandbox URL, sensitivity overrides).
-// Never stores credentials. Storage can be missing, full or blocked; every call returns a result instead of throwing.
+// Never stores credentials: a sandbox URL with an embedded user name or password is left out, and the result says so.
+// Storage can be missing, full or blocked; every call returns a result instead of throwing.
+import { hasEmbeddedCredentials } from "../target/authorization";
 
 export const SENSITIVITY_LEVELS = ["PUBLIC", "INTERNAL", "PERSONAL", "SENSITIVE"] as const;
 type Level = (typeof SENSITIVITY_LEVELS)[number];
@@ -22,7 +24,7 @@ export interface SavedWorkspace extends Workspace {
 export const MAX_WORKSPACE_CHARS = 2_000_000;
 
 export type LoadResult = { ok: true; data: SavedWorkspace } | { ok: false; reason: "empty" | "unavailable" | "corrupt" };
-export type SaveResult = { ok: true; savedAt: string } | { ok: false; reason: "unavailable" | "too-large" | "quota"; message: string };
+export type SaveResult = { ok: true; savedAt: string; omitted: "baseUrl"[] } | { ok: false; reason: "unavailable" | "too-large" | "quota"; message: string };
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
@@ -81,7 +83,7 @@ export function createWorkspaceStore(getStorage: () => StorageLike | null | unde
         identities: ws.identities,
         permissions: ws.permissions,
         ownership: ws.ownership,
-        baseUrl: ws.baseUrl,
+        baseUrl: hasEmbeddedCredentials(ws.baseUrl) ? "" : ws.baseUrl,
         overrides: { ...ws.overrides },
       };
       const raw = JSON.stringify(data);
@@ -91,7 +93,7 @@ export function createWorkspaceStore(getStorage: () => StorageLike | null | unde
       try {
         s.setItem(key, raw);
         s.setItem(rememberKey, "1");
-        return { ok: true, savedAt: now };
+        return { ok: true, savedAt: now, omitted: hasEmbeddedCredentials(ws.baseUrl) ? ["baseUrl"] : [] };
       } catch (e) {
         return { ok: false, reason: "quota", message: `browser storage refused the data (${e instanceof Error ? e.name : String(e)})` };
       }

@@ -33,6 +33,19 @@ export function normalizeTargetUrl(raw: string | null | undefined): string | nul
   return `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
 }
 
+/** True when a URL carries a user name or password (http://user:pass@host). Such a URL must never be stored or exported. */
+export function hasEmbeddedCredentials(raw: string | null | undefined): boolean {
+  const text = (raw ?? "").trim();
+  if (!text) return false;
+  try {
+    const url = new URL(text);
+    return !!(url.username || url.password);
+  } catch {
+    // Not parseable as a URL: still refuse anything shaped like "scheme://user:secret@host".
+    return /^[a-z][a-z0-9+.-]*:\/\/[^/@\s]*@/i.test(text);
+  }
+}
+
 export function deriveTargetAuthorization(
   baseUrl: string | null | undefined,
   record?: TargetAuthorizationRecord | null,

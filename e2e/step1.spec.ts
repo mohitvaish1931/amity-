@@ -54,12 +54,12 @@ test.describe("Step 1: demo model", () => {
 
     // 1–3. open, load the bundled demo, build
     await page.goto(APP);
-    await page.getByRole("button", { name: "Load Demo Swagger + Config" }).click();
+    await page.getByRole("button", { name: "Load demo spec + config" }).click();
     await expect(page.locator("#swaggerText")).not.toBeEmpty();
     // The graph code (React Flow) is lazy-loaded: nothing of it is downloaded before BUILD.
     const graphChunk = (u: string) => /\/chunks\/mount-[\w-]+\.js$/.test(u);
     expect(seen.requests.filter(graphChunk)).toEqual([]);
-    await page.getByRole("button", { name: "[ BUILD SECURITY TWIN ]" }).click();
+    await page.getByRole("button", { name: "Build Security Twin" }).click();
 
     // 4–6. graph appears with exactly the model's nodes and edges
     const graph = page.getByTestId("twin-graph");
@@ -126,14 +126,14 @@ test.describe("Step 1: regression states", () => {
   test("empty model: nothing rendered before a build, and a spec without operations yields no endpoints or laws", async ({ page, baseURL }) => {
     const seen = watch(page);
     await page.goto(APP);
-    await expect(page.locator("#twinGraph")).toContainText("Click BUILD SECURITY TWIN");
+    await expect(page.locator("#twinGraph")).toContainText("generated after the build");
     await expect(nodes(page)).toHaveCount(0);
 
     const { config } = demoInput();
     const spec = JSON.stringify({ openapi: "3.0.3", info: { title: "empty", version: "1" }, paths: {} });
     const expected = expectedFor(spec, config);
     await fillConfig(page, spec, config);
-    await page.getByRole("button", { name: "[ BUILD SECURITY TWIN ]" }).click();
+    await page.getByRole("button", { name: "Build Security Twin" }).click();
     await expect(page.locator("#invCount")).toHaveText("0 endpoints");
     await expect(nodes(page)).toHaveCount(expected.graph.nodes.length);
     await expect(page.locator('[data-testid="twin-node"][data-node-type="endpoint"]')).toHaveCount(0);
@@ -159,7 +159,7 @@ test.describe("Step 1: regression states", () => {
     const expected = expectedFor(spec, config);
     await page.goto(APP);
     await fillConfig(page, spec, config);
-    await page.getByRole("button", { name: "[ BUILD SECURITY TWIN ]" }).click();
+    await page.getByRole("button", { name: "Build Security Twin" }).click();
 
     await expect(nodes(page)).toHaveCount(expected.graph.nodes.length);
     await expect(edges(page)).toHaveCount(expected.graph.edges.length);
@@ -181,13 +181,13 @@ test.describe("Step 1: regression states", () => {
       dialogs.push(d.message());
       await d.dismiss();
     });
-    await page.getByRole("button", { name: "[ BUILD SECURITY TWIN ]" }).click();
+    await page.getByRole("button", { name: "Build Security Twin" }).click();
     const error = page.getByRole("alert").filter({ hasText: "Invalid spec" });
     await expect(error).toContainText("Invalid spec: nothing was built.");
     await expect(error).toContainText("Invalid JSON");
     expect(dialogs).toEqual([]);
     await expect(nodes(page)).toHaveCount(0);
-    await expect(page.locator("#twinGraph")).toContainText("Click BUILD SECURITY TWIN");
+    await expect(page.locator("#twinGraph")).toContainText("generated after the build");
     await expect(page.getByTestId("law-card")).toHaveCount(0);
     expect(seen.consoleErrors).toEqual([]);
     expectOnlyLocalAssets(seen.requests, baseURL!);
